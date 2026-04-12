@@ -1,4 +1,3 @@
-
 @startuml a
 skinparam classAttributeIconSize 0
 skinparam monochrome true
@@ -244,6 +243,9 @@ class Account {
     - password: string
     - score: int
     + addScore(num: int): void
+    + operator<(other: Account): bool
+    + operator>(other: Account): bool
+    + operator==(other: Account): bool
 }
 
 class AccountManager {
@@ -271,7 +273,7 @@ class Player {
   + canAfford(amount: int): bool
   + addProperty(property: PropertyTile): void
   + removeProperty(property: PropertyTile): void
-  + addCard(card: AbilityCard): void
+  + addCard(card: AbilityCard*): void
   + dropCard(index: int): void
   + useAbilityCard(index: int, game: Game): void
   + enterJail(): void
@@ -281,6 +283,9 @@ class Player {
   + getTotalWealth(): int
   + isBankrupt(): bool
   + toString(): string
+  + operator<(other: Player): bool
+  + operator>(other: Player): bool
+  + operator==(other: Player): bool
 }
 
 ' ======================================================
@@ -442,29 +447,26 @@ class DemolitionCard {
   + use(player: Player, game: Game): void
 }
 
-class AbilityCardDeck {
-  - drawPile: vector<AbilityCard>
-  - discardPile: vector<AbilityCard>
-  + draw(): AbilityCard
-  + discard(card: AbilityCard): void 
-}
-
-class DrawCardDeck {
-  - pile: vector<DrawCard>
-  + draw(): DrawCard
+class "CardDeck<T>" as CardDeck {
+  - drawPile: vector<T*>
+  - discardPile: vector<T*>
+  + draw(): T*
+  + discard(card: T*): void 
+  + shuffleDiscardToDraw(): void
+  + returnAndReshuffle(card: T*): void
 }
 
 class CardManager {
-  - chanceDeck: DrawCardDeck
-  - communityDeck: DrawCardDeck
+  - chanceDeck: CardDeck<ChanceCard>
+  - communityDeck: CardDeck<CommunityChestCard>
   - abilityDeck: AbilityCardDeck
-  + drawChanceCard(): DrawCard
-  + drawCommunityCard(): DrawCard
-  + drawAbilityCard(): AbilityCard
-  + giveTurnStartAbility(player: Player): void
-  + handleHandOverflow(player: Player): void
-  + discardAbilityCard(card: AbilityCard): void
-  + toString(): string
+  + drawChanceCard(): DrawCard*
+  + drawCommunityCard(): DrawCard*
+  + drawAbilityCard(): AbilityCard*
+  + giveTurnStartAbility(player: Player*): void
+  + handleHandOverflow(player: Player*): void
+  + discardAbilityCard(card: AbilityCard*): void
+  + returnChanceCard(card: DrawCard*): void
 }
 
 ' ======================================================
@@ -613,10 +615,9 @@ GameManager *-- Game
 Board *-- "40" Tile
 Logger *-- "0..*" LogEntry
 
-CardManager *-- "2" DrawCardDeck
-CardManager *-- "1" AbilityCardDeck
-DrawCardDeck *-- DrawCard
-AbilityCardDeck *-- AbilityCard
+CardManager *-- "3" CardDeck
+CardDeck *-- "0..*" DrawCard : "T = DrawCard"
+CardDeck *-- "0..*" AbilityCard : "T = AbilityCard"
 
 Player -- "0..*" PropertyTile
 PropertyTile -- "0..1" Player : owner
