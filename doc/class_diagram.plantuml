@@ -581,7 +581,7 @@ AbilityCard <|-- LassoCard
 AbilityCard <|-- DemolitionCard
 
 GameException <|-- HandOverFlowException
-GameException <|-- BankcruptException
+GameException <|-- BankruptException
 
 ' ======================================================
 ' COMPOSITION
@@ -641,7 +641,7 @@ Player o-- Account
 ' ======================================================
 
 Game ..> HandOverFlowException
-Game ..> BankcruptException
+Game ..> BankruptException
 ConfigLoader ..> Config
 AuctionManager ..> Player
 AuctionManager ..> PropertyTile
@@ -666,10 +666,10 @@ class HandOverFlowException {
   + HandOverFlowException()
 }
 
-class BankcruptException {
+class BankruptException {
   - message: string
-  - bankcruptCode: int
-  + BankcruptException(code: int)
+  - bankruptCode: int
+  + BankruptException(code: int)
 }
 
 @enduml
