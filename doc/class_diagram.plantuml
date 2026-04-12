@@ -392,7 +392,8 @@ class SpecialTile {
 ' ======================================================
 
 abstract class DrawCard {
-  - description: string
+  # description: string
+  # effect: function<void()>
   + apply(player: Player, game: Game): void
   + getDescription(): string
 }
@@ -448,7 +449,7 @@ class AbilityCardDeck {
 }
 
 class DrawCardDeck {
-  - pile: vector<*DrawCard>
+  - pile: vector<DrawCard>
   + draw(): DrawCard
 }
 
@@ -579,6 +580,8 @@ AbilityCard <|-- TeleportCard
 AbilityCard <|-- LassoCard
 AbilityCard <|-- DemolitionCard
 
+GameException <|-- HandOverFlowException
+
 ' ======================================================
 ' COMPOSITION
 ' ======================================================
@@ -615,6 +618,8 @@ Logger *-- "0..*" LogEntry
 
 CardManager *-- "2" DrawCardDeck
 CardManager *-- "1" AbilityCardDeck
+DrawCardDeck *-- DrawCard
+AbilityCardDeck *-- AbilityCard
 
 Player -- "0..*" PropertyTile
 PropertyTile -- "0..1" Player : owner
@@ -642,6 +647,7 @@ BankruptcyManager ..> Player
 BankruptcyManager ..> PropertyTile
 BankruptcyManager ..> AuctionManager
 BankruptcyManager ..> Game
+Tile ..> Player
 CardTile ..> Game
 FestivalTile ..> Game
 TaxTile ..> Game
