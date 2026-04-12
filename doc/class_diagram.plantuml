@@ -179,6 +179,7 @@ class Game {
   - cardManager: CardManager
   - auctionManager: AuctionManager
   - bankruptcyManager: BankruptcyManager
+  - tradeManager: TradeManager
   - logger: Logger
   - config: Config
   - gameOver: bool
@@ -466,11 +467,36 @@ class AuctionManager {
   + finalizeAuction(): void
 }
 
+class TradeManager {
+  - tradesToPlayer: vector<Trade*>
+  + getTrades(): vector<Trade*>
+  + addTrade(giver: Player, getter: Player, propGive: vector<Trade*>, propGive: vector<Trade*>): void
+  + executeTrade(tradeId: int): void
+  + negotiateTrade(): void
+}
+
+class TradeToPlayer {
+  - staticNextID: int
+  - tradeID: int
+  - propGive: vector<PropertyTile, int>
+  - propGet: vector<PropertyTile, int>
+  - giver: Player
+  - getter: Player
+  + getTradeID(): int
+  + getPropGive(): vector<PropertyTile*>
+  + getPropGet(): vector<PropertyTile*> 
+}
+
+class LiquidationManager {
+  - _calculatePrice(player: Player, property: PropertyTile*): int
+  + _liquidateAssets(player: Player, targetProp: vector<PropertyTile*>): void
+}
+
 class BankruptcyManager {
+  - liquidationManager: LiquidationManager
   + canRecoverDebt(player: Player, amount: int): bool
   + estimateMaxLiquidationValue(player: Player): int
   + resolveDebt(debtor: Player, amount: int, game: Game): void
-  + liquidateAssets(player: Player, targetAmount: int): void
   + declareBankruptToBank(player: Player, game: Game): void
   + declareBankruptToPlayer(player: Player, creditor: Player, game: Game): void
   + transferAssets(from: Player, to: Player): void
@@ -595,6 +621,8 @@ Game *-- AuctionManager
 Game *-- BankruptcyManager
 Game *-- Logger
 Game *-- Config
+Game *-- TradeManager
+Game *-- LiquidationManager
 GameManager *-- Game
 
 Board *-- "40" Tile
@@ -613,6 +641,9 @@ TaxTile *-- TaxType
 CardTile *-- CardDeckType
 Player -- "0..3" AbilityCard
 
+
+BankruptcyManager *-- LiquidationManager
+
 ' ======================================================
 ' AGGREGATION
 ' ======================================================
@@ -622,6 +653,7 @@ Scene o-- SceneManager
 SceneManager o-- GameManager
 SceneManager o-- AccountManager
 Player o-- Account
+TradeManager "1" o-- "0..*" TradeToPlayer
 
 ' ======================================================
 ' DEPENDENCIES
