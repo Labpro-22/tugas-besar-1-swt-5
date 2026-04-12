@@ -31,10 +31,13 @@ void TextField::update() {
                 cursorPos--;
             } else if (key == KEY_RIGHT && cursorPos < text.size()) {
                 cursorPos++;
-            } else if (key >= 32 && key <= 126) { 
-                text.insert(cursorPos, 1, static_cast<char>(key));
-                cursorPos++;
             }
+        }
+        int charPressed = GetCharPressed();
+        while (charPressed > 0) {
+            text.insert(cursorPos, 1, static_cast<char>(charPressed));
+            cursorPos++;
+            charPressed = GetCharPressed();
         }
     }
 }
