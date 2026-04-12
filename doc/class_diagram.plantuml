@@ -238,6 +238,7 @@ package "Game Logic Layer" as Core_Layer {
     + endTurn(): void
     + handleLanding(player: Player): void
     + checkWinCondition(): void
+    + executeCommand(comand: string): void
   } 
 
   class GameManager {
