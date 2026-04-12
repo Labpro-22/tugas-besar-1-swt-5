@@ -525,7 +525,7 @@ package "Game Logic Layer" as Core_Layer {
   class TradeManager {
     - tradesToPlayer: vector<Trade*>
     + getTrades(): vector<Trade*>
-    + addTrade(giver: Player, getter: Player, propGive: vector<Trade*>, propGive: vector<Trade*>): void
+    + addTrade(giver: Player, getter: Player, propGive: map<PropertyTile*, int>, propGive: map<PropertyTile*, int>): void
     + executeTrade(tradeId: int): void
     + negotiateTrade(): void
   }
@@ -533,8 +533,8 @@ package "Game Logic Layer" as Core_Layer {
   class TradeToPlayer {
     - staticNextID: int
     - tradeID: int
-    - propGive: vector<PropertyTile, int>
-    - propGet: vector<PropertyTile, int>
+    - propGive: map<PropertyTile*, int>
+    - propGet: map<PropertyTile*, int>
     - giver: Player
     - getter: Player
     + getTradeID(): int
