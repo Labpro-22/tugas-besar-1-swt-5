@@ -1,4 +1,3 @@
-
 @startuml a
 skinparam classAttributeIconSize 0
 skinparam monochrome true
@@ -245,6 +244,9 @@ class Account {
     - password: string
     - score: int
     + addScore(num: int): void
+    + operator<(other: Account): bool
+    + operator>(other: Account): bool
+    + operator==(other: Account): bool
 }
 
 class AccountManager {
@@ -281,6 +283,9 @@ class Player {
   + resetTurnFlags(): void
   + getTotalWealth(): int
   + isBankrupt(): bool
+  + operator<(other: Player): bool
+  + operator>(other: Player): bool
+  + operator==(other: Player): bool
 }
 
 ' ======================================================
