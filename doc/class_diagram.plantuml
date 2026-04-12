@@ -135,6 +135,40 @@ class SceneManager {
 }
 
 ' ======================================================
+' EXCEPTIONS
+' ======================================================
+
+class GameException {
+  # message : string
+  + GameException(message: string)
+  + getMessage(): string
+}
+
+class HandOverFlowException {
+  + HandOverFlowException(message: string)
+}
+
+class BankruptException {
+  - bankruptCode: int
+  + BankruptException(code: int, message: string)
+}
+
+class InsufficientFundsException {
+  - requiredAmount: int
+  - currentAmount: int
+  + InsufficientFundsException(req: int, cur: int, message: string)
+  + getDeficit(): int
+}
+
+class InvalidActionException {
+  + InvalidActionException(message: string)
+}
+
+class FileIOException {
+  + FileIOException(message: string)
+}
+
+' ======================================================
 ' ENUMS
 ' ======================================================
 
@@ -386,7 +420,7 @@ class SpecialTile {
 
 abstract class DrawCard {
   # description: string
-  # effect: function<void()>
+  # effect: function<void(Player, Game)>
   + apply(player: Player, game: Game): void
   + getDescription(): string
 }
@@ -434,18 +468,23 @@ class DemolitionCard {
   + use(player: Player, game: Game): void
 }
 
-class "CardDeck<T>" as CardDeck {
-  - drawPile: vector<T*>
-  - discardPile: vector<T*>
+class "DrawCardDeck<T>" as DrawCardDeck {
+  - pile: vector<T>
+  - shuffler: mt19937
+  - picker: uniform_int_distribution<>
   + draw(): T*
-  + discard(card: T*): void 
-  + shuffleDiscardToDraw(): void
-  + returnAndReshuffle(card: T*): void
+}
+
+class AbilityCardDeck {
+  - drawPile: vector<AbilityCard>
+  - discardedPile: vector<AbilityCard>
+  + draw(): AbilityCard
+  + discard(card: AbilityCard): void
 }
 
 class CardManager {
-  - chanceDeck: CardDeck<ChanceCard>
-  - communityDeck: CardDeck<CommunityChestCard>
+  - chanceDeck: DrawCardDeck<ChanceCard>
+  - communityDeck: DrawCardDeck<CommunityChestCard>
   - abilityDeck: AbilityCardDeck
   + drawChanceCard(): DrawCard*
   + drawCommunityCard(): DrawCard*
@@ -628,9 +667,10 @@ GameManager *-- Game
 Board *-- "40" Tile
 Logger *-- "0..*" LogEntry
 
-CardManager *-- "3" CardDeck
-CardDeck *-- "0..*" DrawCard : "T = DrawCard"
-CardDeck *-- "0..*" AbilityCard : "T = AbilityCard"
+CardManager *-- DrawCardDeck
+CardManager *-- AbilityCardDeck
+DrawCardDeck *-- DrawCard
+AbilityCardDeck *-- AbilityCard
 
 Player -- "0..*" PropertyTile
 Player *-- PlayerStatus
@@ -661,6 +701,14 @@ TradeManager "1" o-- "0..*" TradeToPlayer
 
 Game ..> HandOverFlowException
 Game ..> BankruptException
+Player ..> InsufficientFundsException
+AuctionManager ..> InsufficientFundsException
+PropertyTile ..> InvalidActionException
+StreetTile ..> InvalidActionException
+Player ..> InvalidActionException
+Loader ..> FileIOException
+Game ..> GameException
+GameManager ..> GameException
 GameManager ..> Loader
 AccountManager ..> Loader
 AuctionManager ..> Player
@@ -676,34 +724,5 @@ FestivalTile ..> Game
 TaxTile ..> Game
 StreetTile ..> Game
 
-class GameException {
-  # message : string
-  + GameException(message: string)
-  + getMessage(): string
-}
-
-class HandOverFlowException {
-  + HandOverFlowException(message: string)
-}
-
-class BankruptException {
-  - bankruptCode: int
-  + BankruptException(code: int, message: string)
-}
-
-class InsufficientFundsException {
-  - requiredAmount: int
-  - currentAmount: int
-  + InsufficientFundsException(req: int, cur: int, message: string)
-  + getDeficit(): int
-}
-
-class InvalidActionException {
-  + InvalidActionException(message: string)
-}
-
-class FileIOException {
-  + FileIOException(message: string)
-}
 
 @enduml
