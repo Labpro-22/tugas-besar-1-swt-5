@@ -13,7 +13,7 @@ private:
     GameManager* gameManager;
     
 public:
-    SceneManager() : currentScene(nullptr), accountManager(nullptr), gameManager(nullptr) {}
+    SceneManager() : currentScene(), accountManager(nullptr), gameManager(nullptr) {}
     void setScene(Scene* newScene);
     void update();
     void draw();

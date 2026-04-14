@@ -14,6 +14,12 @@ protected:
     std::vector<UIElement*> children;
 
 public:
+    Flexbox() {
+        boundingBox = {0, 0, 800, 600};
+    }
+    Flexbox(Rectangle bound) {
+        boundingBox = bound;
+    }
     float spacing;
     float padding;
     Alignment alignment;

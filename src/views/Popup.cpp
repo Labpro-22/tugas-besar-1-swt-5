@@ -1,9 +1,14 @@
 #include "../../include/views/Popup.hpp"
 
+Popup::Popup(float width, float height) {
+    isActive = false; 
+    float x = (800 - width) / 2;
+    float y = (600 - height) / 2;
+    container = VerticalFlexbox({x, y, width, height});
+}
+
 void Popup::draw() {
     if (isActive) {
-        DrawRectangle(boundingBox.x, boundingBox.y, boundingBox.width, boundingBox.height, {0, 0, 0, 200});
-        container.setBoundary(boundingBox);
         container.layout();
         container.draw();
     }

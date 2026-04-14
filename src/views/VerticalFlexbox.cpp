@@ -1,9 +1,10 @@
 #include "../../include/views/VerticalFlexbox.hpp"
 
-VerticalFlexbox::VerticalFlexbox() {
-    spacing = 10.0f;
-    padding = 10.0f;
-    alignment = Alignment::START;
+VerticalFlexbox::VerticalFlexbox(Rectangle bound) {
+    spacing= 10.0f;
+    padding= 10.0f;
+    alignment= Alignment::START;
+    boundingBox= bound;
 }
 
 void VerticalFlexbox::layout() {

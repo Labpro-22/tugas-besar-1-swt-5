@@ -11,7 +11,7 @@ class GameManager;
 class SceneManager;
 class AccountManager;
 
-class Scene : public UIElement { //Ada perubahan, Popup jadi anak dari UIElement biar bisa pake boundingBox langsung
+class Scene { //Ada perubahan, Popup jadi anak dari UIElement biar bisa pake boundingBox langsung
 protected:
     std::map<std::string, Popup> popups;
     VerticalFlexbox root;
@@ -21,7 +21,10 @@ protected:
     AccountManager* accountManager;
 
 public:
-    Scene() : currentPopup(nullptr), gameManager(nullptr), sceneManager(nullptr), accountManager(nullptr) {}
+    Scene() : currentPopup(nullptr), gameManager(nullptr), sceneManager(nullptr), accountManager(nullptr),
+              root({0, 0, 800, 600}), popups({}) {
+
+    }
     virtual void draw() = 0;
     virtual void update() = 0;
     void showPopup(const std::string& key);

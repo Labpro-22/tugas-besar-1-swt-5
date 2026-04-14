@@ -3,7 +3,8 @@
 #include "Flexbox.hpp"
 class VerticalFlexbox : public Flexbox {
 public:
-    VerticalFlexbox();
+    VerticalFlexbox() : Flexbox() {}
+    VerticalFlexbox(Rectangle bound);
     void layout() override;
 };
 
