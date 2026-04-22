@@ -1,8 +1,8 @@
-#include "LiquidationManager.hpp"
-#include "Player.hpp"
-#include "PropertyTile.hpp"
-#include "StreetTile.hpp"
-#include "InvalidActionException.hpp"
+#include "../../include/core/LiquidationManager.hpp"
+#include "../../include/core/Player.hpp"
+#include "../../include/core/PropertyTile.hpp"
+#include "../../include/core/StreetTile.hpp"
+#include "../../include/core/InvalidActionException.hpp"
 
 using namespace std;
 
@@ -60,3 +60,5 @@ void LiquidationManager::liquidateAssets(Player& player, const vector<pair<Prope
         }
     }
 }
+
+// Catatan: perubahan kelas
