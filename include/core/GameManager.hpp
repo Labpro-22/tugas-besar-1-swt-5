@@ -17,7 +17,6 @@ public:
     // Destructor
     ~GameManager(); 
 
-
     GameManager(const GameManager&) = delete;
     GameManager& operator=(const GameManager&) = delete;
 
