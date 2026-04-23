@@ -80,3 +80,17 @@ bool Player::operator>(const Player& other) const {
 bool Player::operator==(const Player& other) const {
     return this->getTotalWealth() == other.getTotalWealth();
 }
+std::vector<PropertyTile*>& Player::getOwnedProperties() {
+    return this->ownedProperties;
+}
+
+std::string Player::getUsername() const {
+    if (this->account == nullptr) {
+        return "COM" + std::to_string(this->id);
+    }
+    return this->account->getName();
+}
+
+int Player::getId() const {
+    return id;
+}

@@ -1,6 +1,6 @@
 #include "../../include/core/BankruptcyManager.hpp"
 #include "../../include/core/LiquidationManager.hpp"
-#include "../../include/core/Player.hpp"
+#include "../../include/models/Player.hpp"
 #include "../../include/core/PropertyTile.hpp"
 #include "../../include/core/StreetTile.hpp"
 #include "../../include/core/Game.hpp"

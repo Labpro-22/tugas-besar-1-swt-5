@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <memory>
+#include <string>
 
 class Game;
 class PropertyTile;
@@ -16,6 +17,7 @@ enum class PlayerStatus {
 class Player
 {
 private:
+    int id;
     Account* account;
     int money;
     int position;
@@ -30,15 +32,16 @@ private:
     int consecutiveDoubleCount;
 
 public:
-    Player(Account* account, int money) : account(account), money(money), position(0), status(PlayerStatus::ACTIVE),
+    Player(int id, Account* account, int money) : id(id), account(account), money(money), position(0), status(PlayerStatus::ACTIVE),
         ownedProperties({}), handCards({}), jailTurnsAttempted(0), usedAbilityThisTurn(false),
         shieldActive(false), discountPercent(0), discountDuration(0), consecutiveDoubleCount(0) {}
-    Player(Account* account, int money, int position, PlayerStatus status, std::vector<PropertyTile*> ownedProperties,
+    Player(int id, Account* account, int money, int position, PlayerStatus status, std::vector<PropertyTile*> ownedProperties,
         std::vector<std::unique_ptr<AbilityCard>> handCards, int jailTurnsAttempted, bool usedAbilityThisTurn, bool shieldActive,
-        int discountPercent, int discountDuration, int consecutiveDoubleCount) : account(account), money(money),
-        position(position), status(status), ownedProperties(ownedProperties), handCards(handCards),
-        jailTurnsAttempted(jailTurnsAttempted), usedAbilityThisTurn(usedAbilityThisTurn), shieldActive(shieldActive),
-        discountPercent(discountPercent), discountDuration(discountDuration), consecutiveDoubleCount(consecutiveDoubleCount) {}
+        int discountPercent, int discountDuration, int consecutiveDoubleCount)
+            : id(id), account(account), money(money),
+            position(position), status(status), ownedProperties(ownedProperties), handCards(handCards),
+            jailTurnsAttempted(jailTurnsAttempted), usedAbilityThisTurn(usedAbilityThisTurn), shieldActive(shieldActive),
+            discountPercent(discountPercent), discountDuration(discountDuration), consecutiveDoubleCount(consecutiveDoubleCount) {}
     void moveTo(int position);
     void pay(int amount);
     void receive(int amount);
@@ -58,4 +61,7 @@ public:
     bool operator<(const Player& other) const;
     bool operator>(const Player& other) const;
     bool operator==(const Player& other) const;
+    std::vector<PropertyTile*>& getOwnedProperties();
+    std::string getUsername() const;
+    int getId() const;
 };
