@@ -40,13 +40,13 @@ public:
         tuple<int, int> miscConfig,
         tuple<int, string, string, string, string> actionTileConfig
     );
-    tuple<int, string, string, string, string, int, int, vector<int>> getPropertyConfig(string code);
+    vector<tuple<int, string, string, string, string, int, int, vector<int>>> getPropertyConfig();
     int getRailroadRent(int count);
     int getUtilityMultiplier(int count);
     int getTaxConfig(int taxTypeIdx); //PPH, PERSEN, PBM
     int getSpecialConfig(int specialIdx); // GO_SALARY, JAIL_FINE
     int getMiscConfig(int miscIdx); // MAX_TURN, SALDO_AWAL
-    int getActionTileConfig(int tileID);
+    tuple<int, string, string, string, string> getActionTileConfig();
 };
 
 #endif
