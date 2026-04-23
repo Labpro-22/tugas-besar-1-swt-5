@@ -3,17 +3,17 @@
 #include <vector>
 #include <string>
 
-class Board;
-class Player;
-class TurnManager;
-class Dice;
-class CardManager;
-class AuctionManager;
-class BankruptcyManager;
-class TradeManager;
-class LiquidationManager;
-class Logger;
-class Config;
+#include "Board.hpp"
+#include "Player.hpp"
+#include "TurnManager.hpp"
+#include "Dice.hpp"
+#include "CardManager.hpp"
+#include "AuctionManager.hpp"
+#include "BankruptcyManager.hpp"
+#include "TradeManager.hpp"
+#include "LiquidationManager.hpp"
+#include "Logger.hpp"
+#include "Config.hpp"
 
 using namespace std;
 
