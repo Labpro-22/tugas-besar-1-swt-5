@@ -15,6 +15,7 @@ private:
 
 public:
     GameStateSaver(string path);
+    ifstream getOfstream();
     void savePlayers(vector<Player> players);
     void saveProperties(vector<PropertyTile> properties);
     void saveDecks(CardManager newCardManager);

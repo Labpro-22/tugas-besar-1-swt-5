@@ -28,7 +28,7 @@ private:
     tuple<int, int, int> taxConfig;
     tuple<int, int> specialConfig;
     tuple<int, int> miscConfig;
-    tuple<int, string, string, string, string> actionTileConfig;
+    vector<tuple<int, string, string, string, string>> actionTileConfig;
 
 public:
     Config(
@@ -38,7 +38,7 @@ public:
         tuple<int, int, int> taxConfig,
         tuple<int, int> specialConfig,
         tuple<int, int> miscConfig,
-        tuple<int, string, string, string, string> actionTileConfig
+        vector<tuple<int, string, string, string, string>> actionTileConfig
     );
     tuple<int, string, string, string, string, int, int, vector<int>> getPropertyConfig(string code);
     int getRailroadRent(int count);
@@ -46,7 +46,7 @@ public:
     int getTaxConfig(int taxTypeIdx); //PPH, PERSEN, PBM
     int getSpecialConfig(int specialIdx); // GO_SALARY, JAIL_FINE
     int getMiscConfig(int miscIdx); // MAX_TURN, SALDO_AWAL
-    int getActionTileConfig(int tileID);
+    vector<tuple<int, string, string, string, string>> getActionTileConfig();
 };
 
 #endif
