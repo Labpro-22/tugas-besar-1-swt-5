@@ -64,4 +64,5 @@ public:
     std::vector<PropertyTile*>& getOwnedProperties();
     std::string getUsername() const;
     int getId() const;
+    int getPosition() const;
 };

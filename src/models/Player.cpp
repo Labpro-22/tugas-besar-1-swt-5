@@ -94,3 +94,7 @@ std::string Player::getUsername() const {
 int Player::getId() const {
     return id;
 }
+
+int Player::getPosition() const {
+    return this->position;
+}
