@@ -20,6 +20,7 @@ Config ConfigComposer::buildConfig(const string &pathProp, const string &pathRai
         miscHandler.getMiscTileConfig(),
         actionHandler.getActionTileConfig()
     );
+    return config;
 }
 
 Config &ConfigComposer::getConfig()

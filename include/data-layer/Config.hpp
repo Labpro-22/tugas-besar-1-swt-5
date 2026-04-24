@@ -41,12 +41,14 @@ public:
         vector<tuple<int, string, string, string, string>> actionTileConfig
     );
     tuple<int, string, string, string, string, int, int, vector<int>> getPropertyConfig(string code);
+    vector<tuple<int, string, string, string, string, int, int, vector<int>>> getPropertyConfigAll();
     int getRailroadRent(int count);
     int getUtilityMultiplier(int count);
     int getTaxConfig(int taxTypeIdx); //PPH, PERSEN, PBM
     int getSpecialConfig(int specialIdx); // GO_SALARY, JAIL_FINE
     int getMiscConfig(int miscIdx); // MAX_TURN, SALDO_AWAL
-    vector<tuple<int, string, string, string, string>> getActionTileConfig();
+    vector<tuple<int, string, string, string, string>> getActionTileConfigAll();
+    tuple<int,string,string,string,string> getActionTileConfig(string code);
 };
 
 #endif

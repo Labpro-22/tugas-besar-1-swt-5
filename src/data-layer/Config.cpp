@@ -1,8 +1,5 @@
 #include "../../include/data-layer/Config.hpp"
 
-<<<<<<< Updated upstream
-tuple<int, string, string, string, string, int, int, vector<int>> Config::getPropertyConfig(string code)
-=======
 Config::Config(
         vector<tuple<int, string, string, string, string, int, int, vector<int>>> propertyConfigs,
         map<int, int> railroadRentTable,
@@ -11,41 +8,69 @@ Config::Config(
         tuple<int, int> specialConfig,
         tuple<int, int> miscConfig,
         vector<tuple<int, string, string, string, string>> actionTileConfig
-)
->>>>>>> Stashed changes
-{
-    int idx = 0;
-    for (size_t i = 0; i < this->propertyConfigs.size();i++) {
-        if (get<1>(this->propertyConfigs[idx]).compare(code) == 0) {
-            break;
-        }
-        idx++;
-    }
-    return this->propertyConfigs[idx];
-} 
+) : 
+    propertyConfigs(propertyConfigs),
+    railroadRentTable(railroadRentTable),
+    utilityMultiplier(utilityMultiplier),
+    taxConfig(taxConfig),
+    specialConfig(specialConfig),
+    miscConfig(miscConfig),
+    actionTileConfig(actionTileConfig){}
 
+tuple<int, string, string, string, string, int, int, vector<int>> Config::getPropertyConfig(string code)
+{
+    for (auto i = this->propertyConfigs.begin(); i != this->propertyConfigs.end(); i++)
+    {
+        if (get<1>(*i).compare(code) == 0){
+            return *i;
+        }
+    }
+    auto notFound = make_tuple(-1, "nan", "nan", "nan", "nan", -1, -1, vector<int>{-1, -2, -3});
+    return notFound;
+}
+
+vector<tuple<int, string, string, string, string, int, int, vector<int>>> Config::getPropertyConfigAll()
+{
+    return this->propertyConfigs;
+}
 int Config::getRailroadRent(int count)
 {
+    int minQt = 99;
+    int maxQt = -99;
+    int maxQtVal = 0;
+    int minQtVal = 0;
+
     auto iter = railroadRentTable.find(count);
     if (iter != railroadRentTable.end()){
         return iter->second;
     }
-    return -1;
-}
-
-int Config::getUtilityMultiplier(int count)
-{
-    auto iter = utilityMultiplier.find(count);
-    if (iter != utilityMultiplier.end()){
-        return iter->second;
-    }
-<<<<<<< Updated upstream
-    return -1;
-=======
 
     if (count >= minQt && count <= maxQt) {
         auto iter = railroadRentTable.find(count);
         if (iter != railroadRentTable.end()){
+            return iter->second;
+        }
+    }
+    
+    if (count < minQt) return minQtVal;
+    return maxQtVal;
+}
+
+int Config::getUtilityMultiplier(int count)
+{
+    int minQt = 99;
+    int maxQt = -99;
+    int maxQtVal = 0;
+    int minQtVal = 0;
+
+    auto iter = utilityMultiplier.find(count);
+    if (iter != utilityMultiplier.end()){
+        return iter->second;
+    }
+
+    if (count >= minQt && count <= maxQt) {
+        auto iter = utilityMultiplier.find(count);
+        if (iter != utilityMultiplier.end()){
             return iter->second;
         }
     }
@@ -77,12 +102,23 @@ int Config::getMiscConfig(int miscIdx) // MAX_TURN, SALDO_AWAL
 {
     switch(miscIdx) {
         case(MAX_TURN): return get<MAX_TURN>(this->miscConfig);
-        case(SALDO_AWAL): return get<JAIL_FINE>(this->miscConfig);
+        case(SALDO_AWAL): return get<SALDO_AWAL>(this->miscConfig);
         default: return 0;
     }
 }
-vector<tuple<int, string, string, string, string>> Config::getActionTileConfig()
+vector<tuple<int, string, string, string, string>> Config::getActionTileConfigAll()
 {
     return this->actionTileConfig;
->>>>>>> Stashed changes
+}
+
+tuple<int,string,string,string,string> Config::getActionTileConfig(string code)
+{
+     for (auto i = this->actionTileConfig.begin(); i != this->actionTileConfig.end(); i++)
+    {
+        if (get<1>(*i).compare(code) == 0){
+            return *i;
+        }
+    }
+    auto notFound = make_tuple(-1, "nan", "nan", "nan", "nan");
+    return notFound;
 }
