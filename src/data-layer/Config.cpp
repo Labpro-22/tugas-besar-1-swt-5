@@ -35,14 +35,19 @@ vector<tuple<int, string, string, string, string, int, int, vector<int>>> Config
 }
 int Config::getRailroadRent(int count)
 {
-    int minQt = 99;
     int maxQt = -99;
+    int minQt = 99;
     int maxQtVal = 0;
     int minQtVal = 0;
-
-    auto iter = railroadRentTable.find(count);
-    if (iter != railroadRentTable.end()){
-        return iter->second;
+    for (auto i : this->railroadRentTable){
+        if (i.first > maxQt) {
+           maxQt = i.first; 
+           maxQtVal = i.second;
+        }
+        if (i.first < minQt) {
+            minQt = i.first;
+            minQtVal = i.second;
+        }
     }
 
     if (count >= minQt && count <= maxQt) {
@@ -58,19 +63,24 @@ int Config::getRailroadRent(int count)
 
 int Config::getUtilityMultiplier(int count)
 {
-    int minQt = 99;
     int maxQt = -99;
+    int minQt = 99;
     int maxQtVal = 0;
     int minQtVal = 0;
-
-    auto iter = utilityMultiplier.find(count);
-    if (iter != utilityMultiplier.end()){
-        return iter->second;
+    for (auto i : this->utilityMultiplier){
+        if (i.first > maxQt) {
+           maxQt = i.first; 
+           maxQtVal = i.second;
+        }
+        if (i.first < minQt) {
+            minQt = i.first;
+            minQtVal = i.second;
+        }
     }
 
     if (count >= minQt && count <= maxQt) {
-        auto iter = utilityMultiplier.find(count);
-        if (iter != utilityMultiplier.end()){
+        auto iter = railroadRentTable.find(count);
+        if (iter != railroadRentTable.end()){
             return iter->second;
         }
     }
