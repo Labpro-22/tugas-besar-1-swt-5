@@ -35,7 +35,7 @@ private:
 
 public:
     Player(int id, Account* account, int money) : id(id), account(account), money(money), position(0), status(PlayerStatus::ACTIVE),
-        ownedProperties({}), handCards({}), jailTurnsAttempted(0), usedAbilityThisTurn(false),
+        ownedProperties(), handCards(), jailTurnsAttempted(0), usedAbilityThisTurn(false),
         shieldActive(false), discountPercent(0), discountDuration(0), consecutiveDoubleCount(0) {}
     Player(int id, Account* account, int money, int position, PlayerStatus status, std::vector<PropertyTile*> ownedProperties,
         std::vector<std::unique_ptr<AbilityCard>> handCards, int jailTurnsAttempted, bool usedAbilityThisTurn, bool shieldActive,

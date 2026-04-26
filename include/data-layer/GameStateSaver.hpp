@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <fstream>
 #include <string>
+#include "../utils/PropertyTile.hpp"
 
 class AbilityCard;
 class AbilityCardDeck;
@@ -11,7 +12,6 @@ template <typename T>
 class DrawCardDeck;
 
 enum class PlayerStatus;
-enum class PropertyStatus;
 
 class GameStateSaver
 {

@@ -84,10 +84,10 @@ std::string GameStateSaver::propertyStatusToString(PropertyStatus status)
 {
     switch (status)
     {
-        case PropertyStatus::BANK:       return "BANK";
-        case PropertyStatus::OWNED:      return "OWNED";
-        case PropertyStatus::MORTGAGED:  return "MORTGAGED";
-        default:                         return "UNKNOWN";
+        case BANK:       return "BANK";
+        case OWNED:      return "OWNED";
+        case MORTGAGED:  return "MORTGAGED";
+        default:         return "UNKNOWN";
     }
 }
 
