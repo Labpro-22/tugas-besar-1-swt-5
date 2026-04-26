@@ -1,15 +1,15 @@
 #include "GameStateSaver.hpp"
 
-#include "Game.hpp"
-#include "Board.hpp"
-#include "Player.hpp"
-#include "AbilityCard.hpp"
-#include "DrawCardDeck.hpp"
-#include "CardManager.hpp"
-#include "Logger.hpp"
-#include "LogEntry.hpp"
-#include "PropertyTile.hpp"
-#include "Tile.hpp"
+#include "../../include/core/Game.hpp"
+#include "../../include/utils/Board.hpp"
+#include "../../include/models/Player.hpp"
+#include "../../include/models/AbilityCard.hpp"
+#include "../../include/models/DrawCardDeck.hpp"
+#include "../../include/core/CardManager.hpp"
+#include "../../include/utils/Logger.hpp"
+#include "../../include/utils/LogEntry.hpp"
+#include "../../include/utils/PropertyTile.hpp"
+#include "../../include/utils/Tile.hpp"
 
 #include <fstream>
 #include <memory>
