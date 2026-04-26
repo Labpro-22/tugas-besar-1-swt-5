@@ -25,4 +25,7 @@ public:
     DrawCardDeck<ChanceCard>& getChanceDeck() { return chanceDeck; }
     DrawCardDeck<CommunityChestCard>& getCommunityDeck() { return communityDeck; }
     AbilityCardDeck& getAbilityDeck() { return abilityDeck; }
+    void setChanceDeck(const DrawCardDeck<ChanceCard>& deck);
+    void setCommunityDeck(const DrawCardDeck<CommunityChestCard>& deck);
+    void setAbilityDeck(AbilityCardDeck&& deck);
 };

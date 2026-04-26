@@ -1,6 +1,7 @@
 #include "../../include/core/CardManager.hpp"
 #include "../../include/models/Player.hpp"
 #include <memory>
+#include <utility>
 
 CardManager::CardManager() {
     static StepbackCard stepbackCard;
@@ -42,4 +43,15 @@ void CardManager::giveTurnStartAbility(Player* player) {
 }
 void CardManager::discardAbilityCard(std::unique_ptr<AbilityCard> card) {
     this->abilityDeck.discard(std::move(card));
+}
+void CardManager::setChanceDeck(const DrawCardDeck<ChanceCard>& deck) {
+    this->chanceDeck = deck;
+}
+
+void CardManager::setCommunityDeck(const DrawCardDeck<CommunityChestCard>& deck) {
+    this->communityDeck = deck;
+}
+
+void CardManager::setAbilityDeck(AbilityCardDeck&& deck) {
+    this->abilityDeck = std::move(deck);
 }

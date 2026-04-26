@@ -12,23 +12,18 @@ private:
     Game* currentGame;
 
 public:
-    // Constructor
     GameManager();
-    
-    // Destructor
-    ~GameManager(); 
+    ~GameManager();
 
     GameManager(const GameManager&) = delete;
     GameManager& operator=(const GameManager&) = delete;
 
-    // Core Functionalities
     void startNewGame();
+    void loadGame(const string& fileName);
     void loadGame(const string& fileName, const AccountManager& accManager);
     void saveGame(const string& fileName) const;
-    
-    // Helper
-    void quitCurrentGame(); 
 
-    // Getters
+    void quitCurrentGame();
+
     Game* getCurrentGame() const;
 };

@@ -13,6 +13,8 @@ public:
     AbilityCardDeck();
     AbilityCardDeck(std::vector<std::unique_ptr<AbilityCard>> drawPile, std::vector<std::unique_ptr<AbilityCard>> discardedPile);
     AbilityCardDeck(AbilityCardDeck& other);
+    AbilityCardDeck(AbilityCardDeck&& other) noexcept;
+    AbilityCardDeck& operator=(AbilityCardDeck&& other) noexcept;
     std::unique_ptr<AbilityCard> draw();
     void discard(std::unique_ptr<AbilityCard> card);
     const std::vector<std::unique_ptr<AbilityCard>>& getDrawPile() const { return drawPile; }

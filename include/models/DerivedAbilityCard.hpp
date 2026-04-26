@@ -23,6 +23,7 @@ private:
     int steps;
 public:
     MoveCard();
+    explicit MoveCard(int steps);
     void setup();
     void use(Player* target, Game* game);
     std::string serialize() const;
@@ -42,6 +43,7 @@ private:
     int percentage;
 public:
     DiscountCard();
+    explicit DiscountCard(int percentage);
     void setup();
     void use(Player* target, Game* game);
     std::string serialize() const;

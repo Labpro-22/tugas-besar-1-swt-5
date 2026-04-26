@@ -42,6 +42,17 @@ AbilityCardDeck::AbilityCardDeck(AbilityCardDeck& other) {
     other.drawPile.clear();
 }
 
+AbilityCardDeck::AbilityCardDeck(AbilityCardDeck&& other) noexcept
+    : drawPile(std::move(other.drawPile)), discardedPile(std::move(other.discardedPile)) {}
+
+AbilityCardDeck& AbilityCardDeck::operator=(AbilityCardDeck&& other) noexcept {
+    if (this != &other) {
+        drawPile = std::move(other.drawPile);
+        discardedPile = std::move(other.discardedPile);
+    }
+    return *this;
+}
+
 std::unique_ptr<AbilityCard> AbilityCardDeck::draw() {
     if (this->drawPile.empty()) {
         std::mt19937 randomizer(std::random_device{}());
