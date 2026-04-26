@@ -6,6 +6,7 @@
 #include "../../include/core/InvalidActionException.hpp"
 
 #include <algorithm>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -46,23 +47,30 @@ void Game::startTurn() {
     // Reset flag awal giliran
     current.resetTurnFlags();
 
-    // Beri kartu kemampuan ke SEMUA pemain aktif
-    for (Player& p : players) {
-        if (!p.isBankrupt()) {
-            cardManager.giveTurnStartAbility(&p);
-            // Cek overflow: max 3 kartu
-            while (p.getHandCards().size() > 3) {
-                cout << "[" << p.getUsername() << "] Tangan penuh! Pilih kartu yang dibuang (0-"
-                     << p.getHandCards().size() - 1 << "): ";
-                int dropIdx = 0;
+    // Beri 1 kartu kemampuan ke pemain saat ini di awal giliran
+    if (!current.isBankrupt()) {
+        cardManager.giveTurnStartAbility(&current);
+        // Cek overflow: max 3 kartu
+        if (current.getHandCards().size() > 3) {
+            cout << "\n[" << current.getUsername() << "] Tangan penuh (maks 3)! Kartu saat ini:\n";
+            for (size_t i = 0; i < current.getHandCards().size(); ++i) {
+                cout << "  " << i << ". " << current.getHandCards()[i]->getName()
+                     << " - " << current.getHandCards()[i]->getDescription() << "\n";
+            }
+            int dropIdx = -1;
+            while (dropIdx < 0 || dropIdx >= static_cast<int>(current.getHandCards().size())) {
+                cout << "Pilih kartu yang dibuang (0-" << current.getHandCards().size() - 1 << "): ";
                 cin >> dropIdx;
-                cin.ignore();
-                try {
-                    auto dropped = p.dropCard(dropIdx);
-                    cardManager.discardAbilityCard(move(dropped));
-                } catch (...) {
-                    p.dropCard(static_cast<int>(p.getHandCards().size()) - 1);
-                }
+                if (cin.fail()) { cin.clear(); cin.ignore(1000, '\n'); dropIdx = -1; }
+            }
+            cin.ignore(1000, '\n');
+            try {
+                auto dropped = current.dropCard(dropIdx);
+                cardManager.discardAbilityCard(move(dropped));
+                cout << "Kartu dibuang. Sisa: " << current.getHandCards().size() << "\n";
+            } catch (...) {
+                auto dropped = current.dropCard(static_cast<int>(current.getHandCards().size()) - 1);
+                cardManager.discardAbilityCard(move(dropped));
             }
         }
     }
@@ -119,7 +127,13 @@ void Game::startTurn() {
                 else cout << pt->toString() << "\n";
 
             } else if (cmd == "CETAK_LOG") {
-                logger.printLog();
+                int count = -1;
+                ss >> count;
+                if (count > 0) {
+                    logger.printLog(count);
+                } else {
+                    logger.printLog();
+                }
 
             } else if (cmd == "CETAK_KARTU") {
                 const auto& hand = current.getHandCards();
@@ -293,7 +307,53 @@ void Game::startTurn() {
 
             } else if (cmd == "SIMPAN") {
                 if (hasRolled) { cout << "Simpan hanya bisa sebelum lempar dadu.\n"; continue; }
-                cout << "(Simpan ditangani GameManager)\n";
+                string filename;
+                ss >> filename;
+                if (filename.empty()) {
+                    cout << "Masukkan nama file: SIMPAN <nama_file>\n";
+                    continue;
+                }
+                try {
+                    ofstream out(filename);
+                    if (!out.is_open()) { cout << "Gagal membuka file: " << filename << "\n"; continue; }
+                    // Format: turn_saat_ini max_turn
+                    out << turnManager.getCurrentTurn() << " " << turnManager.getMaxTurn() << "\n";
+                    // jumlah_pemain
+                    out << players.size() << "\n";
+                    // state tiap pemain
+                    for (const Player& p : players) {
+                        string statusStr = "ACTIVE";
+                        if (p.getStatus() == PlayerStatus::JAILED) statusStr = "JAILED";
+                        else if (p.getStatus() == PlayerStatus::BANKRUPT) statusStr = "BANKRUPT";
+                        Tile* tile = (board.size() > 0 && p.getPosition() < board.size()) ? board.getTileByIndex(p.getPosition()) : nullptr;
+                        string posCode = tile ? tile->getCode() : to_string(p.getPosition());
+                        out << p.getUsername() << " " << p.getMoney() << " " << posCode << " " << statusStr << "\n";
+                        out << p.getHandCards().size() << "\n";
+                        for (const auto& card : p.getHandCards()) {
+                            out << card->serialize() << "\n";
+                        }
+                    }
+                    // urutan giliran
+                    for (size_t i = 0; i < players.size(); ++i) {
+                        if (i > 0) out << " ";
+                        out << players[i].getUsername();
+                    }
+                    out << "\n";
+                    // giliran aktif
+                    out << players[static_cast<size_t>(turnManager.getCurrentPlayerIndex())].getUsername() << "\n";
+                    // properti (placeholder sederhana)
+                    out << "# STATE_PROPERTI placeholder\n";
+                    // deck (placeholder)
+                    out << "# STATE_DECK placeholder\n";
+                    // log
+                    out << logger.getEntries().size() << "\n";
+                    out << logger.serialize();
+                    out.close();
+                    cout << "Permainan berhasil disimpan ke: " << filename << "\n";
+                    logger.log(turnManager.getCurrentTurn(), current.getUsername(), "SIMPAN", filename);
+                } catch (const exception& e) {
+                    cout << "Gagal menyimpan: " << e.what() << "\n";
+                }
 
             } else if (cmd == "AKHIRI_GILIRAN") {
                 if (!hasRolled) { cout << "Lempar dadu dulu.\n"; continue; }
