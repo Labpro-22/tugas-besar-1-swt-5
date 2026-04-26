@@ -124,21 +124,7 @@ void Game::startTurn() {
                 board.printBoard(makePlayerMarkers(), makeTurnInfo());
 
             } else if (cmd == "CETAK_PROPERTI") {
-                string who;
-                ss >> who;
-                Player* target = &current;
-                if (!who.empty()) {
-                    for (Player& p : players) {
-                        if (p.getUsername() == who) { target = &p; break; }
-                    }
-                }
-                if (target->getOwnedProperties().empty()) {
-                    cout << target->getUsername() << " tidak memiliki properti.\n";
-                } else {
-                    for (PropertyTile* pt : target->getOwnedProperties())
-                        cout << pt->toString() << "\n";
-                }
-
+                current.cetakProperti();
             } else if (cmd == "CETAK_AKTA") {
                 cout << "Masukkan kode petak: ";
                 string code;

@@ -3,6 +3,8 @@
 #include "../../include/models/AbilityCard.hpp"
 #include "../../include/utils/PropertyTile.hpp"
 #include "../../include/utils/StreetTile.hpp"
+#include "../../include/utils/UtilityTile.hpp"
+#include "../../include/utils/RailroadTile.hpp"
 #include "../../include/core/InsufficientFundException.hpp"
 #include "../../include/core/BankruptException.hpp"
 #include <stdexcept>
@@ -120,5 +122,66 @@ int Player::getPosition() const {
 }
 
 void Player::cetakProperti() const {
-    
+    printf("=== Properti Milik: %s ===\n\n", this->getUsername().c_str());
+    if (this->ownedProperties.empty()) {
+        printf("Kamu belum memiliki properti apapun.\n");
+        return;
+    }
+    std::map<std::string, vector<StreetTile*>> streets;
+    std::vector<UtilityTile*> utilities;
+    std::vector<RailroadTile*> railroads;
+    for (PropertyTile* prop : this->ownedProperties) {
+        if (dynamic_cast<StreetTile*>(prop) != nullptr) {
+            auto street = dynamic_cast<StreetTile*>(prop);
+            std::string colorGroup = street->getColorGroup();
+            auto it = streets.find(colorGroup);
+            if (it != streets.end()) {
+                it->second.push_back(street);
+            } else {
+                streets[colorGroup] = {street};
+            }
+        }
+        else if (dynamic_cast<UtilityTile*>(prop) != nullptr) {
+            utilities.push_back(dynamic_cast<UtilityTile*>(prop));
+        }
+        else if (dynamic_cast<RailroadTile*>(prop) != nullptr) {
+            railroads.push_back(dynamic_cast<RailroadTile*>(prop));
+        }
+    }
+    for (auto group: streets) {
+        printf("[%s]\n", group.first.c_str());
+        for (auto land : group.second) {
+            std::string level, status;
+            if (land->hasHotelBuilt()) {
+                level = "Hotel";
+            } else if (land->getHouseCount() > 0){
+                level = std::to_string(land->getHouseCount()) + " rumah";
+            } else {level = "";}
+            if (land->getStatus() == PropertyStatus::OWNED) status = "OWNED";
+            else if (land->getStatus() == PropertyStatus::MORTGAGED) status = "MORTGAGED";
+            else if (land->getStatus() == PropertyStatus::BANK) status = "BANK";
+            printf(" - %s (%s)\t\t\t%s\tM%d\t%s\n", land->getName().c_str(), land->getCode().c_str(), level.c_str(), land->getLandPrice(), status.c_str());
+        }
+        printf("\n");
+    }
+    printf("[STASIUN]\n");
+    for (auto rail : railroads) {
+        std::string status;
+        if (rail->getStatus() == PropertyStatus::OWNED) status = "OWNED";
+        else if (rail->getStatus() == PropertyStatus::MORTGAGED) status = "MORTGAGED";
+        else if (rail->getStatus() == PropertyStatus::BANK) status = "BANK";
+        printf(" - %s (%s)\t\t\tM%d\t%s\n", rail->getName().c_str(), rail->getCode().c_str(), rail->getLandPrice(), status.c_str());
+    }
+    printf("\n");
+    printf("[UTILITAS]\n");
+    for (auto util : utilities) {
+        std::string status;
+        if (util->getStatus() == PropertyStatus::OWNED) status = "OWNED";
+        else if (util->getStatus() == PropertyStatus::MORTGAGED) status = "MORTGAGED";
+        else if (util->getStatus() == PropertyStatus::BANK) status = "BANK";
+        printf(" - %s (%s)\t\t\tM%d\t%s\n", util->getName().c_str(), util->getCode().c_str(), util->getLandPrice(), status.c_str());
+    }
+    printf("\n\n");
+
+    printf("Total kekayaan properti: M%d\n", getTotalWealth());
 }
