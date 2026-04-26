@@ -65,3 +65,11 @@ int TurnManager::getCurrentTurn() const {
 int TurnManager::getMaxTurn() const {
     return maxTurn;
 }
+
+void TurnManager::setCurrentPlayerIndex(int currIdx) {
+    this->currentPlayerIndex = currIdx;
+}
+
+void TurnManager::setCurrentTurn(int currTurn) {
+    this->currentTurn = currTurn;
+}
