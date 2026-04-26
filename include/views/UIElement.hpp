@@ -1,21 +1,23 @@
-#ifndef UIELEMENT_HPP
-#define UIELEMENT_HPP
+#ifndef UI_ELEMENT_HPP
+#define UI_ELEMENT_HPP
 
 #include "raylib.h"
 
 class UIElement {
 public:
-    float preferredWidth;
-    float preferredHeight;
+    virtual ~UIElement() = default;
+
+    float preferredWidth = 0.0f;
+    float preferredHeight = 0.0f;
 
     virtual void draw() = 0;
     virtual void update() {}
-    virtual void setBoundary(Rectangle newBound);
-    virtual Rectangle getBoundary();
-    virtual ~UIElement() = default;
+
+    virtual void setBoundary(Rectangle newBound) { boundingBox = newBound; }
+    virtual Rectangle getBoundary() const { return boundingBox; }
 
 protected:
-    Rectangle boundingBox;
+    Rectangle boundingBox{0.0f, 0.0f, 0.0f, 0.0f};
 };
 
 #endif

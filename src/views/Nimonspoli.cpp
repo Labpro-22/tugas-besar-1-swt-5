@@ -1,22 +1,36 @@
 #include "../../include/views/Nimonspoli.hpp"
 
+#include "raylib.h"
+#include "../../include/core/IGameFacade.hpp"
+#include "../../include/core/MockGameFacade.hpp"
+
+Nimonspoli::~Nimonspoli() = default;
+
 void Nimonspoli::setup() {
-    InitWindow(800, 600, "Nimonspoli");
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
+    InitWindow(1440, 980, "Nimonspoli Raylib GUI");
     SetTargetFPS(60);
-    // set scene awal nanti setelah GameManager selesai
+
+    gameFacade = std::make_unique<MockGameFacade>();
+    sceneManager.initialize(gameFacade.get());
+    sceneManager.setScene(SceneType::MainMenu);
 }
 
 void Nimonspoli::start() {
     while (!WindowShouldClose()) {
         update();
         BeginDrawing();
-        ClearBackground(RAYWHITE);
+        ClearBackground(BLACK);
         draw();
         EndDrawing();
     }
+    CloseWindow();
 }
 
 void Nimonspoli::update() {
+    if (gameFacade) {
+        gameFacade->tick(GetFrameTime());
+    }
     sceneManager.update();
 }
 

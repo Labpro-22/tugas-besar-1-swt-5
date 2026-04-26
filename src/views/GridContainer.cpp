@@ -1,39 +1,39 @@
 #include "../../include/views/GridContainer.hpp"
 
-GridContainer::GridContainer(int rows, int cols) : rows(rows), cols(cols) {}
+GridContainer::GridContainer(int rowCount, int colCount) : rows(rowCount), cols(colCount) {}
 
 void GridContainer::add(const GridItem& item) {
     items.push_back(item);
 }
 
 void GridContainer::draw() {
-    for (auto& item : items) {
+    for (GridItem& item : items) {
         item.draw();
     }
 }
 
 void GridContainer::update() {
-    for (auto& item : items) {
+    for (GridItem& item : items) {
         item.update();
     }
 }
 
 void GridContainer::layout() {
-    float cellWidth = boundingBox.width / cols;
-    float cellHeight = boundingBox.height / rows;
+    if (rows <= 0 || cols <= 0) {
+        return;
+    }
 
-    for (auto& item : items) {
-        int row = item.row;
-        int col = item.col;
-        int rowSpan = item.rowSpan;
-        int colSpan = item.colSpan;
+    const float cellWidth = boundingBox.width / static_cast<float>(cols);
+    const float cellHeight = boundingBox.height / static_cast<float>(rows);
 
-        Rectangle itemBound;
-        itemBound.x = boundingBox.x + col * cellWidth;
-        itemBound.y = boundingBox.y + row * cellHeight;
-        itemBound.width = cellWidth * colSpan;
-        itemBound.height = cellHeight * rowSpan;
-
-        item.setBoundary(itemBound);
+    for (GridItem& item : items) {
+        Rectangle bound{
+            boundingBox.x + cellWidth * static_cast<float>(item.col),
+            boundingBox.y + cellHeight * static_cast<float>(item.row),
+            cellWidth * static_cast<float>(item.colSpan),
+            cellHeight * static_cast<float>(item.rowSpan)
+        };
+        item.setBoundary(bound);
+        item.layout();
     }
 }

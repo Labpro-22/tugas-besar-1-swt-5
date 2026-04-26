@@ -1,21 +1,24 @@
 #include "../../include/views/VerticalFlexbox.hpp"
 
-VerticalFlexbox::VerticalFlexbox() {
-    spacing = 10.0f;
-    padding = 10.0f;
-    alignment = Alignment::START;
-}
+VerticalFlexbox::VerticalFlexbox() : Flexbox() {}
+
+VerticalFlexbox::VerticalFlexbox(Rectangle bound) : Flexbox(bound) {}
 
 void VerticalFlexbox::layout() {
-    float yOffset = boundingBox.y + padding;
-    for (auto& child : children) {
-        float xOffset = boundingBox.x + padding;
-        if (alignment == Alignment::CENTER) {
-            xOffset += (boundingBox.width - padding * 2 - child->preferredWidth) / 2;
-        } else if (alignment == Alignment::END) {
-            xOffset += boundingBox.width - padding * 2 - child->preferredWidth;
+    float cursorY = boundingBox.y + padding;
+    for (UIElement* child : children) {
+        if (child == nullptr) {
+            continue;
         }
-        child->setBoundary({xOffset, yOffset, child->preferredWidth, child->preferredHeight});
-        yOffset += child->preferredHeight + spacing;
+
+        float childX = boundingBox.x + padding;
+        if (alignment == Alignment::CENTER) {
+            childX = boundingBox.x + (boundingBox.width - child->preferredWidth) * 0.5f;
+        } else if (alignment == Alignment::END) {
+            childX = boundingBox.x + boundingBox.width - padding - child->preferredWidth;
+        }
+
+        child->setBoundary({childX, cursorY, child->preferredWidth, child->preferredHeight});
+        cursorY += child->preferredHeight + spacing;
     }
 }

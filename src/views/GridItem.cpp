@@ -1,22 +1,22 @@
 #include "../../include/views/GridItem.hpp"
 
-GridItem::GridItem(UIElement* item, int row, int col, int rowSpan, int colSpan) 
-    : item(item), row(row), col(col), rowSpan(rowSpan), colSpan(colSpan) {}
+GridItem::GridItem(UIElement* value, int rowValue, int colValue, int rowSpanValue, int colSpanValue)
+    : item(value), row(rowValue), col(colValue), rowSpan(rowSpanValue), colSpan(colSpanValue) {}
 
 void GridItem::draw() {
-    if (item) {
+    if (item != nullptr) {
         item->draw();
     }
 }
 
 void GridItem::update() {
-    if (item) {
+    if (item != nullptr) {
         item->update();
     }
 }
 
 void GridItem::layout() {
-    if (item) {
+    if (item != nullptr) {
         item->setBoundary(boundingBox);
     }
 }

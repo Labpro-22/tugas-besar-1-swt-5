@@ -1,22 +1,34 @@
-#ifndef SCENEMANAGER_HPP
-#define SCENEMANAGER_HPP
-#include "Scene.hpp"
+#ifndef SCENE_MANAGER_HPP
+#define SCENE_MANAGER_HPP
 
-// Forward declarations to avoid circular dependencies
-class AccountManager;
-class GameManager; 
+#include <memory>
+
+class IGameFacade;
+class Scene;
+class MainMenuScene;
+class InGameScene;
+
+enum class SceneType {
+    MainMenu,
+    InGame
+};
 
 class SceneManager {
-private:
-    Scene* currentScene;
-    AccountManager* accountManager;
-    GameManager* gameManager;
-    
 public:
-    SceneManager() : currentScene(nullptr), accountManager(nullptr), gameManager(nullptr) {}
-    void setScene(Scene* newScene);
+    SceneManager();
+    explicit SceneManager(IGameFacade* facade);
+    ~SceneManager();
+
+    void initialize(IGameFacade* facade);
+    void setScene(SceneType type);
     void update();
     void draw();
+
+private:
+    IGameFacade* gameFacade;
+    std::unique_ptr<MainMenuScene> mainMenuScene;
+    std::unique_ptr<InGameScene> inGameScene;
+    Scene* currentScene;
 };
 
 #endif

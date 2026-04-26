@@ -1,47 +1,64 @@
 #include "../../include/views/TextField.hpp"
 
-TextField:: TextField(const std::string& text) : text(text), isActive(false), cursorPos(0) {
-    preferredHeight = 30;
-    preferredWidth = 200;
+TextField::TextField() : TextField("Masukkan teks") {}
+
+TextField::TextField(const std::string& placeholderValue) : placeholder(placeholderValue) {
+    preferredWidth = 340.0f;
+    preferredHeight = 52.0f;
 }
 
-void TextField::draw() {
-    Color bgColor = isActive ? LIGHTGRAY : GRAY;
-    DrawRectangle(boundingBox.x, boundingBox.y, boundingBox.width, boundingBox.height, bgColor);
-    DrawText(text.c_str(), boundingBox.x + 5, boundingBox.y + 5, 20, BLACK);
-    if (isActive) {
-        int cursorX = boundingBox.x + 5 + MeasureText(text.substr(0, cursorPos).c_str(), 20);
-        DrawLine(cursorX, boundingBox.y + 5, cursorX, boundingBox.y + boundingBox.height - 5, BLACK);
-    }
+void TextField::setPlaceholder(const std::string& value) {
+    placeholder = value;
+}
+
+void TextField::setContent(const std::string& value) {
+    text = value.substr(0, static_cast<std::size_t>(maxLength));
+}
+
+const std::string& TextField::getContent() const {
+    return text;
+}
+
+bool TextField::hasFocus() const {
+    return isActive;
 }
 
 void TextField::update() {
     if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
         isActive = CheckCollisionPointRec(GetMousePosition(), boundingBox);
     }
-    if (isActive) {
-        int key = GetKeyPressed();
-        if (key > 0) {
-            if (key == KEY_BACKSPACE && !text.empty() && cursorPos > 0) {
-                text.erase(cursorPos - 1, 1);
-                cursorPos--;
-            } else if (key == KEY_DELETE && !text.empty() && cursorPos < text.size()) {
-                text.erase(cursorPos, 1);
-            } else if (key == KEY_LEFT && cursorPos > 0) {
-                cursorPos--;
-            } else if (key == KEY_RIGHT && cursorPos < text.size()) {
-                cursorPos++;
-            }
+
+    if (!isActive) {
+        return;
+    }
+
+    int ch = GetCharPressed();
+    while (ch > 0) {
+        if (ch >= 32 && ch <= 126 && static_cast<int>(text.size()) < maxLength) {
+            text.push_back(static_cast<char>(ch));
         }
-        int charPressed = GetCharPressed();
-        while (charPressed > 0) {
-            text.insert(cursorPos, 1, static_cast<char>(charPressed));
-            cursorPos++;
-            charPressed = GetCharPressed();
-        }
+        ch = GetCharPressed();
+    }
+
+    if (IsKeyPressed(KEY_BACKSPACE) && !text.empty()) {
+        text.pop_back();
     }
 }
 
-std::string TextField::getContent() {
-    return text;
+void TextField::draw() {
+    const Color panel = isActive ? Color{34, 43, 88, 255} : Color{23, 31, 67, 255};
+    DrawRectangleRounded({boundingBox.x + 3, boundingBox.y + 4, boundingBox.width, boundingBox.height}, 0.22f, 8, Fade(BLACK, 0.18f));
+    DrawRectangleRounded(boundingBox, 0.22f, 8, panel);
+    DrawRectangleRoundedLinesEx(boundingBox, 0.22f, 8, 2.0f, isActive ? Color{103, 177, 255, 255} : Fade(WHITE, 0.18f));
+
+    const bool empty = text.empty();
+    const std::string& shown = empty ? placeholder : text;
+    const Color tint = empty ? Color{150, 160, 205, 255} : Color{242, 245, 255, 255};
+    DrawText(shown.c_str(), static_cast<int>(boundingBox.x + 16.0f), static_cast<int>(boundingBox.y + 15.0f), 22, tint);
+
+    if (isActive && (static_cast<int>(GetTime() * 2.0) % 2 == 0)) {
+        const int width = MeasureText(text.c_str(), 22);
+        const float lineX = boundingBox.x + 16.0f + static_cast<float>(width) + 2.0f;
+        DrawLineEx({lineX, boundingBox.y + 14.0f}, {lineX, boundingBox.y + boundingBox.height - 14.0f}, 2.0f, WHITE);
+    }
 }
