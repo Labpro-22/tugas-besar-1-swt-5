@@ -15,6 +15,11 @@ StreetTile::StreetTile(int id, std::string code, std::string name,
       houseCount(0),
       hasHotel(false) {}
 
+void StreetTile::demolish() {
+    this->hasHotel = false;
+    this->houseCount = 0;
+}
+
 int StreetTile::calculateRent(Player* visitor, Game* game) {
     (void) visitor;
     (void) game;

@@ -1,6 +1,8 @@
 #include "../../include/models/DerivedAbilityCard.hpp"
 #include "../../include/core/Game.hpp"
 #include "../../include/data-layer/Config.hpp"
+#include "../../include/core/InvalidActionException.hpp"
+#include "../../include/utils/StreetTile.hpp"
 
 std::string AbilityCard::escapeSerializedValue(const std::string& value)
 {
@@ -85,7 +87,15 @@ std::string ShieldCard::serialize() const
 TeleportCard::TeleportCard() : AbilityCard("TeleportCard", "Bebas berpindah ke petak manapun di atas papan permainan.") {}
 
 void TeleportCard::use(Player* target, Game* game) {
-    // TODO: TELEPORT
+    int dest;
+    std::cin >> dest;
+    auto board = game->getBoard();
+    int size = board.size();
+    if (dest < 0 || dest > size - 1) {
+        throw InvalidActionException("TELEPORT KE LUAR BOARD");
+    }
+    target->moveTo(dest);
+    board.getTileByIndex(dest)->onLand(target, game);
 }
 
 std::string TeleportCard::serialize() const
@@ -96,7 +106,14 @@ std::string TeleportCard::serialize() const
 
 LassoCard::LassoCard() : AbilityCard("LassoCard", "Tarik satu pemain lain di depanmu ke posisimu.") {}
 void LassoCard::use(Player* target, Game* game) {
-    // TODO: PULL OTHER PLAYER
+    int id;
+    std::cin >> id;
+    if (id < 0 || id > game->getPlayers().size() || id == target->getId()) {
+        throw InvalidActionException("LASSO PLAYER TIDAK VALID");
+    }
+    auto enemy = game->getPlayer(id);
+    enemy.moveTo(target->getPosition());
+    game->getBoard().getTileByIndex(target->getPosition())->onLand(&enemy, game);
 }
 
 std::string LassoCard::serialize() const
@@ -106,7 +123,18 @@ std::string LassoCard::serialize() const
 
 DemolitionCard::DemolitionCard() : AbilityCard("DemolitionCard", "Hancurkan satu properti milik pemain lain.") {}
 void DemolitionCard::use(Player* target, Game* game) {
-    // TODO: DEMOLISH
+    int dest;
+    std::cin >> dest;
+    auto board = game->getBoard();
+    int size = board.size();
+    if (dest < 0 || dest > size - 1) {
+        throw InvalidActionException("DEMOLISH KE LUAR BOARD");
+    }
+    StreetTile* prop = dynamic_cast<StreetTile*>(board.getTileByIndex(dest));
+    if (prop == nullptr) {
+        throw InvalidActionException("BUKAN STREET, TIDAK BISA DEMOLISH");
+    }
+    prop->demolish();
 }
 
 std::string DemolitionCard::serialize() const
