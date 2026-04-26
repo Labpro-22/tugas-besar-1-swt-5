@@ -1,6 +1,7 @@
 #include "../../include/models/Player.hpp"
 #include "../../include/models/Account.hpp"
 #include "../../include/models/AbilityCard.hpp"
+#include "../../include/utils/PropertyTile.hpp"
 #include "../../include/core/InsufficientFundException.hpp"
 #include "../../include/core/BankruptException.hpp"
 #include <stdexcept>
@@ -58,8 +59,12 @@ void Player::resetTurnFlags() {
     this->consecutiveDoubleCount = 0;
 }
 int Player::getTotalWealth() const {
-    return money;
-    // TODO: CALCULATE WEALTH FROM PROPERTY
+    int wealth = money;
+    for (size_t i = 0; i < this->ownedProperties.size(); i++)
+    {
+        wealth += ownedProperties[i]->getLandPrice();
+    }
+    return wealth;
 }
 bool Player::isBankrupt() const {
     return this->status == PlayerStatus::BANKRUPT;
@@ -70,8 +75,9 @@ std::string Player::toString() const {
     // <JUMLAH_KARTU_TANGAN>
     // <JENIS_KARTU_1> <NILAI_KARTU_1> <SISA_DURASI_1>
     // <JENIS_KARTU_2> <NILAI_KARTU_2> <SISA_DURASI_2>
+    // yang ngerjain kamu? ok thanks
 
-    return this->account->getName() + " " + std::to_string(this->money);
+    return getUsername() + " " + std::to_string(this->money);
 }
 void Player::useAbilityCard(int index, Game* game) {
     this->handCards.at(index)->use(this, game);
