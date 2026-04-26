@@ -11,7 +11,7 @@ private:
     std::uniform_int_distribution<> picker;
 public:
     DrawCardDeck() : pile({}) {}
-    DrawCardDeck(std::vector pile) : pile(pile), shuffler(std::random_device{}()), picker(0, (int)p.size() - 1){}
+    DrawCardDeck(std::vector<T*> pile) : pile(pile), shuffler(std::random_device{}()), picker(0, (int)pile.size() - 1){}
     T* draw() {
         return pile[picker(shuffler)];
     }
