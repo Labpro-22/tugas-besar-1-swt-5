@@ -140,6 +140,7 @@ void Game::startTurn() {
                 }
 
             } else if (cmd == "CETAK_AKTA") {
+                ss.clear();
                 string code; ss >> code;
                 PropertyTile* pt = dynamic_cast<PropertyTile*>(board.getTileByCode(code));
                 if (!pt) cout << "Petak \"" + code + "\" tidak ditemukan atau bukan properti.";
