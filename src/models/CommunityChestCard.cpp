@@ -7,7 +7,7 @@
 BirthdayCard::BirthdayCard() : CommunityChestCard(
     "Ini adalah hari ulang tahun Anda. Dapatkan M100 dari setiap pemain.",
     [](Player* p, Game* g) {
-        for (auto player : g->getPlayers()) {
+        for (Player& player : g->getPlayers()) {
             if (player.getId() != p->getId()) {
                 try {
                     try {
@@ -44,7 +44,7 @@ PayDoctorCard::PayDoctorCard() : CommunityChestCard(
 NyalegCard::NyalegCard() : CommunityChestCard(
     "Anda mau nyaleg. Bayar M200 kepada setiap pemain.",
     [](Player* p, Game* g) {
-        for (auto player : g->getPlayers()) {
+        for (Player& player : g->getPlayers()) {
             if (player.getId() != p->getId()) {
                 try {
                     try {
