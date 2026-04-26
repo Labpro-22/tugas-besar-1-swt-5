@@ -21,7 +21,8 @@ public:
     CommunityChestCard* drawCommunityCard();
     std::unique_ptr<AbilityCard> drawAbilityCard();
     void giveTurnStartAbility(Player* player);
-    void discardAbilityCard(std::unique_ptr<AbilityCard> card);DrawCardDeck<ChanceCard>& getChanceDeck() { return chanceDeck; }
+    void discardAbilityCard(std::unique_ptr<AbilityCard> card);
+    DrawCardDeck<ChanceCard>& getChanceDeck() { return chanceDeck; }
     DrawCardDeck<CommunityChestCard>& getCommunityDeck() { return communityDeck; }
     AbilityCardDeck& getAbilityDeck() { return abilityDeck; }
 };
