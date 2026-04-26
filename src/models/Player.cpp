@@ -118,3 +118,7 @@ int Player::getId() const {
 int Player::getPosition() const {
     return this->position;
 }
+
+void Player::cetakProperti() const {
+    
+}

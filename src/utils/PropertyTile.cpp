@@ -124,7 +124,7 @@ void PropertyTile::cetakAkta() const {
     for (size_t i = 0; i < left; i++){std::cout << " ";}
     std::cout << info;
     for (size_t i = 0; i < right; i++){std::cout << " ";}
-    std::cout << std::endl;
+    std::cout << "|" << std::endl;
     std::cout << "+================================+" << std::endl;
     printf("| Harga Beli        : M%3d       |\n", getLandPrice());
     printf("| Harga Gadai       : M%3d       |\n", getMortgageValue());

@@ -183,17 +183,17 @@ void StreetTile::cetakAkta() const {
     for (size_t i = 0; i < left; i++){std::cout << " ";}
     std::cout << info;
     for (size_t i = 0; i < right; i++){std::cout << " ";}
-    std::cout << std::endl;
+    std::cout << "|" << std::endl;
     std::cout << "+================================+" << std::endl;
-    printf("| Harga Beli        : M%3d       |\n", getLandPrice());
-    printf("| Harga Gadai       : M%3d       |\n", getMortgageValue());
+    printf("| Harga Beli        : M%4d      |\n", getLandPrice());
+    printf("| Harga Gadai       : M%4d      |\n", getMortgageValue());
     printf("+--------------------------------+\n");
-    printf("| Sewa (unimproved) : M%3d        |\n", rentTable[0]);   
-    printf("| Sewa (1 rumah)    : M%3d       |\n", rentTable[1]);
-    printf("| Sewa (2 rumah)    : M%3d       |\n",rentTable[2]);
-    printf("| Sewa (3 rumah)    : M%3d       |\n",rentTable[3]);
-    printf("| Sewa (4 rumah)    : M%3d       |\n",rentTable[4]);
-    printf("| Sewa (hotel)      : M%3d       |\n",rentTable[5]);
+    printf("| Sewa (unimproved) : M%4d      |\n", rentTable[0]);   
+    printf("| Sewa (1 rumah)    : M%4d      |\n", rentTable[1]);
+    printf("| Sewa (2 rumah)    : M%4d      |\n", rentTable[2]);
+    printf("| Sewa (3 rumah)    : M%4d      |\n", rentTable[3]);
+    printf("| Sewa (4 rumah)    : M%4d      |\n", rentTable[4]);
+    printf("| Sewa (hotel)      : M%4d      |\n", rentTable[5]);
     printf("+================================+\n");
     std::string statusString;
     switch (status)

@@ -140,11 +140,14 @@ void Game::startTurn() {
                 }
 
             } else if (cmd == "CETAK_AKTA") {
-                ss.clear();
-                string code; ss >> code;
-                PropertyTile* pt = dynamic_cast<PropertyTile*>(board.getTileByCode(code));
-                if (!pt) cout << "Petak \"" + code + "\" tidak ditemukan atau bukan properti.";
-                else pt->cetakAkta();
+                cout << "Masukkan kode petak: ";
+                string code;
+                getline(cin, code);
+                try {
+                    PropertyTile* pt = dynamic_cast<PropertyTile*>(board.getTileByCode(code));
+                    if (!pt) cout << "Petak \"" + code + "\" tidak ditemukan atau bukan properti.\n";
+                    else pt->cetakAkta();
+                } catch (exception e) {cout << "Petak \"" + code + "\" tidak ditemukan atau bukan properti.\n";}
 
             } else if (cmd == "CETAK_LOG") {
                 int count = -1;
