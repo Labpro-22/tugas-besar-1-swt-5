@@ -13,6 +13,6 @@ public:
     }
     bool isDouble(std::pair<int, int> result) {
         auto [num1, num2] = result;
-        return (num1 + num2) == 12;
+        return num1 == num2;
     }
 };
