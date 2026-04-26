@@ -3,11 +3,13 @@
 #include <map>
 #include <string>
 
-#include "Account.hpp" 
+#include "Account.hpp"
 
 using namespace std;
 
-class AccountManager {
+class AccountDataManager;
+class AccountManager
+{
 private:
     map<string, Account> accounts;
 
@@ -16,12 +18,14 @@ public:
     AccountManager() = default;
     ~AccountManager() = default;
 
-    AccountManager(const AccountManager&) = delete;
-    AccountManager& operator=(const AccountManager&) = delete;
+    AccountManager(const AccountManager &) = delete;
+    AccountManager &operator=(const AccountManager &) = delete;
 
     // Core Methods
-    void addAccount(const Account& newAccount);
-    Account* getAccount(const string& name, const string& pass);
-    
-    bool isUsernameTaken(const string& name) const;
+    void addAccount(const Account &newAccount);
+    Account *getAccount(const string &name, const string &pass);
+
+    bool isUsernameTaken(const string &name) const;
+
+    friend AccountDataManager;
 };

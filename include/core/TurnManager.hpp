@@ -27,4 +27,8 @@ public:
     int getCurrentPlayerIndex() const;
     int getCurrentTurn() const;
     int getMaxTurn() const;
+
+    //Setters
+    void setCurrentPlayerIndex(int CurrIdx);
+    void setCurrentTurn(int CurrentTurn);
 };

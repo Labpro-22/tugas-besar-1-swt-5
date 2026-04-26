@@ -35,6 +35,8 @@ public:
         const std::map<int, std::vector<std::string>>& playerMarkers = {},
         const std::string& turnInfo = ""
     ) const;
+    
+    std::vector<PropertyTile*>& getPropertyTiles();
 };
 
 #endif

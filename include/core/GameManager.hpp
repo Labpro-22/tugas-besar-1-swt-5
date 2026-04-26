@@ -5,6 +5,7 @@
 using namespace std;
 
 class Game;
+class AccountManager;
 
 class GameManager {
 private:
@@ -22,7 +23,7 @@ public:
 
     // Core Functionalities
     void startNewGame();
-    void loadGame(const string& fileName);
+    void loadGame(const string& fileName, const AccountManager& accManager);
     void saveGame(const string& fileName) const;
     
     // Helper

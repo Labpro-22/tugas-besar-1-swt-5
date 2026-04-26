@@ -14,4 +14,6 @@ public:
     AbilityCardDeck(std::vector<std::unique_ptr<AbilityCard>> drawPile, std::vector<std::unique_ptr<AbilityCard>> discardedPile);
     std::unique_ptr<AbilityCard> draw();
     void discard(std::unique_ptr<AbilityCard> card);
+    const std::vector<std::unique_ptr<AbilityCard>>& getDrawPile() const { return drawPile; }
+    const std::vector<std::unique_ptr<AbilityCard>>& getDiscardedPile() const { return discardedPile; }
 };

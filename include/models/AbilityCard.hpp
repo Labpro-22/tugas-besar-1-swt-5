@@ -19,4 +19,6 @@ public:
         return name;
     }
     std::string serialize() const;
+    virtual std::string serialize() const;
+    virtual ~AbilityCard() = default;
 };

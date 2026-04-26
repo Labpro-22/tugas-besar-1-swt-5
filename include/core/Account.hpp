@@ -4,6 +4,7 @@
 
 using namespace std;
 
+class AccountDataManager;
 class Account {
 private:
     string username;
@@ -28,4 +29,5 @@ public:
     int getScore() const;
     
     bool validatePassword(const string& inputPassword) const;
+    friend AccountDataManager;
 };

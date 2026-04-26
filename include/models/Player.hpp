@@ -65,4 +65,13 @@ public:
     std::string getUsername() const;
     int getId() const;
     int getPosition() const;
+    int getMoney() const { return money; }
+    PlayerStatus getStatus() const { return status; }
+    int getJailTurnsAttempted() const { return jailTurnsAttempted; }
+    bool hasUsedAbilityThisTurn() const { return usedAbilityThisTurn; }
+    bool isShieldActive() const { return shieldActive; }
+    int getDiscountPercent() const { return discountPercent; }
+    int getDiscountDuration() const { return discountDuration; }
+    int getConsecutiveDoubleCount() const { return consecutiveDoubleCount; }
+    const std::vector<std::unique_ptr<AbilityCard>>& getHandCards() const { return handCards; }
 };

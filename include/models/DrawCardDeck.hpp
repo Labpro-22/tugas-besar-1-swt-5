@@ -15,4 +15,5 @@ public:
     T* draw() {
         return pile[picker(shuffler)];
     }
+    const std::vector<T*>& getPile() const { return pile; }
 };
