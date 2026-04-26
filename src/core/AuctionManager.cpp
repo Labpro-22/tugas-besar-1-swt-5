@@ -1,6 +1,7 @@
-#include "AuctionManager.hpp"
-#include "Player.hpp"
-#include "PropertyTile.hpp"
+#include "../../include/core/AuctionManager.hpp"
+#include "../../include/models/AbilityCard.hpp"
+#include "../../include/models/Player.hpp"
+#include "../../include/utils/PropertyTile.hpp"
 #include <iostream>
 
 using namespace std;
@@ -67,9 +68,9 @@ void AuctionManager::processAction(const string& action, int amount) {
 
 void AuctionManager::finalizeAuction() {
     if (highestBidder != nullptr && currentProperty != nullptr) {
-        highestBidder->debit(highestBid);
-        currentProperty->setOwner(*highestBidder);
-        highestBidder->addProperty(*currentProperty);
+        highestBidder->pay(highestBid);
+        currentProperty->setOwner(highestBidder);
+        highestBidder->addProperty(currentProperty);
     }
 
     auctionActive = false; 

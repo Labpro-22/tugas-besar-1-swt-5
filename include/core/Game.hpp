@@ -3,17 +3,17 @@
 #include <vector>
 #include <string>
 
-#include "Board.hpp"
-#include "Player.hpp"
+#include "../utils/Board.hpp"
+#include "../models/Player.hpp"
 #include "TurnManager.hpp"
-#include "Dice.hpp"
+#include "../models/Dice.hpp"
 #include "CardManager.hpp"
 #include "AuctionManager.hpp"
 #include "BankruptcyManager.hpp"
 #include "TradeManager.hpp"
 #include "LiquidationManager.hpp"
-#include "Logger.hpp"
-#include "Config.hpp"
+#include "../utils/Logger.hpp"
+#include "../data-layer/Config.hpp"
 
 using namespace std;
 

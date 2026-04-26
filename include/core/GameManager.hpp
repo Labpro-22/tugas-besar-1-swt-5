@@ -23,7 +23,7 @@ public:
 
     // Core Functionalities
     void startNewGame();
-    void loadGame(const string& fileName, const AccountManager& accManager);
+    void loadGame(const string& fileName);
     void saveGame(const string& fileName) const;
     
     // Helper

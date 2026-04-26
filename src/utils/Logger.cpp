@@ -1,4 +1,5 @@
 #include "../../include/utils/Logger.hpp"
+#include <string>
 
 void Logger::log(int turn, string username, string actionType, string detail)
 {
@@ -29,13 +30,16 @@ void Logger::clear()
     entries.clear();
 }
 
-void Logger::serialized()
+std::string Logger::serialize() const
 {
+    std::string result;
     for (const LogEntry& entry : entries)
     {
-        cout << entry.getTurn() << " "
-             << entry.getUsername() << " "
-             << entry.getActionType() << " "
-             << entry.getDetail() << endl;
+        result += std::to_string(entry.getTurn())
+               + " " + entry.getUsername()
+               + " " + entry.getActionType()
+               + " " + entry.getDetail()
+               + "\n";
     }
+    return result;
 }

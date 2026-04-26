@@ -1,13 +1,14 @@
 #include "../../include/core/BankruptcyManager.hpp"
 #include "../../include/core/LiquidationManager.hpp"
 #include "../../include/models/Player.hpp"
-#include "../../include/core/PropertyTile.hpp"
-#include "../../include/core/StreetTile.hpp"
+#include "../../include/models/AbilityCard.hpp"
+#include "../../include/utils/PropertyTile.hpp"
+#include "../../include/utils/StreetTile.hpp"
 #include "../../include/core/Game.hpp"
 #include "../../include/core/AuctionManager.hpp"
 #include "../../include/core/TurnManager.hpp"
 #include "../../include/core/BankruptException.hpp"
-#include "../../include/core/Logger.hpp"
+#include "../../include/utils/Logger.hpp"
 
 #include <vector>
 
@@ -19,11 +20,11 @@ void BankruptcyManager::setLiquidationManager(LiquidationManager* liqMgr) {
     this->liquidationManager = liqMgr;
 }
 
-int BankruptcyManager::estimateMaxLiquidationValue(const Player& player) const {
+int BankruptcyManager::estimateMaxLiquidationValue(Player& player) const {
     int totalValue = player.getMoney();
 
     for (const PropertyTile* prop : player.getOwnedProperties()) {
-        totalValue += prop->getPurchasePrice();
+        totalValue += prop->getLandPrice();
         
         const StreetTile* street = dynamic_cast<const StreetTile*>(prop);
         if (street != nullptr) {
@@ -33,7 +34,7 @@ int BankruptcyManager::estimateMaxLiquidationValue(const Player& player) const {
     return totalValue;
 }
 
-bool BankruptcyManager::canRecoverDebt(const Player& player, int amount) const {
+bool BankruptcyManager::canRecoverDebt(Player& player, int amount) const {
     return estimateMaxLiquidationValue(player) >= amount;
 }
 
@@ -55,14 +56,14 @@ void BankruptcyManager::declareBankruptToPlayer(Player& bankruptPlayer, Player& 
 }
 
 void BankruptcyManager::transferAssets(Player& from, Player& to) {
-    to.credit(from.getMoney());
-    from.debit(from.getMoney());
+    to.receive(from.getMoney());
+    from.pay(from.getMoney());
 
     vector<PropertyTile*> propertiesToTransfer = from.getOwnedProperties();
     for (PropertyTile* prop : propertiesToTransfer) {
-        prop->setOwner(to);
-        to.addProperty(*prop);
-        from.removeProperty(*prop);
+        prop->setOwner(&to);
+        to.addProperty(prop);
+        from.removeProperty(prop);
     }
 }
 
@@ -73,7 +74,7 @@ void BankruptcyManager::declareBankruptToBank(Player& bankruptPlayer, Game& game
                          "BANGKRUT", 
                          "Disita oleh Bank dan dilelang");
 
-    bankruptPlayer.debit(bankruptPlayer.getMoney());
+    bankruptPlayer.pay(bankruptPlayer.getMoney());
 
     vector<PropertyTile*> propertiesToAuction = bankruptPlayer.getOwnedProperties();
     for (PropertyTile* prop : propertiesToAuction) {
@@ -83,7 +84,7 @@ void BankruptcyManager::declareBankruptToBank(Player& bankruptPlayer, Game& game
         }
         
         prop->setOwner(nullptr);
-        bankruptPlayer.removeProperty(*prop);
+        bankruptPlayer.removeProperty(prop);
     }
 
     // game.getTurnManager().removePlayer(bankruptPlayer.getId());

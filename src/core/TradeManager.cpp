@@ -1,4 +1,5 @@
 #include "../../include/core/TradeManager.hpp"
+#include "../../include/models/AbilityCard.hpp"
 #include "../../include/models/TradeToPlayer.hpp"
 #include "../../include/models/Player.hpp"
 #include "../../include/utils/PropertyTile.hpp"

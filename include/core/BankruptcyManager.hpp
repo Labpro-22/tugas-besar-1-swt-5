@@ -16,8 +16,8 @@ public:
     // Setter
     void setLiquidationManager(LiquidationManager* liqMgr);
 
-    bool canRecoverDebt(const Player& player, int amount) const;
-    int estimateMaxLiquidationValue(const Player& player) const;
+    bool canRecoverDebt(Player& player, int amount) const;
+    int estimateMaxLiquidationValue(Player& player) const;
     void resolveDebt(Player& debtor, int amount, Game& game);
     void declareBankruptToBank(Player& player, Game& game);
     void declareBankruptToPlayer(Player& player, Player& creditor, Game& game);

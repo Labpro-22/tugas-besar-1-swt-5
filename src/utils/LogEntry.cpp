@@ -1,4 +1,4 @@
-#include "LogEntry.hpp"
+#include "../../include/utils/LogEntry.hpp"
 
 LogEntry::LogEntry()
 {

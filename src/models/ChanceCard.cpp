@@ -1,6 +1,7 @@
 #include "../../include/models/ChanceCard.hpp"
 #include "../../include/utils/Board.hpp"
 #include "../../include/core/Game.hpp"
+#include "../../include/models/AbilityCard.hpp"
 
 StepbackCard::StepbackCard() : ChanceCard(
     "Mundur 3 petak.",

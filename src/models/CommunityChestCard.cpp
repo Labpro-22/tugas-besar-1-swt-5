@@ -3,11 +3,12 @@
 #include "../../include/core/InsufficientFundException.hpp"
 #include "../../include/core/BankruptException.hpp"
 #include "../../include/core/Game.hpp"
+#include "../../include/models/AbilityCard.hpp"
 
 BirthdayCard::BirthdayCard() : CommunityChestCard(
     "Ini adalah hari ulang tahun Anda. Dapatkan M100 dari setiap pemain.",
     [](Player* p, Game* g) {
-        for (auto player : g->getPlayers()) {
+        for (auto& player : g->getPlayers()) {
             if (player.getId() != p->getId()) {
                 try {
                     try {
@@ -44,7 +45,7 @@ PayDoctorCard::PayDoctorCard() : CommunityChestCard(
 NyalegCard::NyalegCard() : CommunityChestCard(
     "Anda mau nyaleg. Bayar M200 kepada setiap pemain.",
     [](Player* p, Game* g) {
-        for (auto player : g->getPlayers()) {
+        for (auto& player : g->getPlayers()) {
             if (player.getId() != p->getId()) {
                 try {
                     try {
