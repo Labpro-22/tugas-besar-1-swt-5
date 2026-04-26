@@ -61,6 +61,7 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             int idx = g->getTurnManager().getCurrentPlayerIndex();
             Player& p = g->getPlayer(idx);
             bool passGo = false;
+            if(g->getBoard().size()==0)return;
             int np = g->getBoard().calculateNewPosition(p.getPosition(),d1+d2,passGo);
             p.moveTo(np);
             if(passGo){int sal=g->getConfig().getSpecialConfig(GO_SALARY);p.receive(sal);
@@ -148,7 +149,7 @@ void InGameScene::update(){
     layoutUi(sr,br,sb);
     tileRects.clear();
     Game* g = gameManager->getCurrentGame();
-    int tileCount = g ? g->getBoard().size() : 40;
+    int tileCount = g ? g->getBoard().size() : 0;
     for(int i=0;i<tileCount;++i) tileRects.push_back(getTileRect(br,i));
     updateAnimations(br);
     if(IsKeyPressed(KEY_ESCAPE)){if(overlayOpen)overlayOpen=false;else{sceneManager->setScene(SceneType::MainMenu);return;}}
@@ -206,6 +207,7 @@ void InGameScene::drawBoard(const Rectangle& br){
     DrawRectangleRounded(br,.04f,10,kBoardSurf);
     DrawRectangleRoundedLinesEx(br,.04f,10,3,Fade(kAccentAlt,.7f));
 
+    if(g->getBoard().size()==0) { drawCenterPanel(br); return; }
     const auto& tiles = g->getBoard().getTiles();
     for(size_t i=0;i<tiles.size()&&i<tileRects.size();++i){
         Tile* tile=tiles[i]; if(!tile)continue;
@@ -270,8 +272,10 @@ void InGameScene::drawSidebar(const Rectangle& sb){
     DrawText(cur.getUsername().c_str(),int(sb.x+50),int(sb.y+52),26,kText);
     DrawText(("M"+std::to_string(cur.getMoney())).c_str(),int(sb.x+16),int(sb.y+88),22,kAccentAlt);
 
-    Tile* posTile=g->getBoard().getTileByIndex(cur.getPosition());
-    if(posTile) DrawText((posTile->getCode()+" - "+posTile->getName()).c_str(),int(sb.x+16),int(sb.y+116),18,kSubtext);
+    if(g->getBoard().size()>0 && cur.getPosition()<g->getBoard().size()){
+        Tile* posTile=g->getBoard().getTileByIndex(cur.getPosition());
+        if(posTile) DrawText((posTile->getCode()+" - "+posTile->getName()).c_str(),int(sb.x+16),int(sb.y+116),18,kSubtext);
+    }
 
     // Progress bar
     Rectangle wave{sb.x+16,sb.y+150,sb.width-32,16};
@@ -283,7 +287,7 @@ void InGameScene::drawSidebar(const Rectangle& sb){
     for(Button& b:actionButtons) b.draw();
 
     // Selected tile
-    Tile* sel=g->getBoard().getTileByIndex(selectedTile);
+    Tile* sel = (g->getBoard().size()>0 && selectedTile<g->getBoard().size()) ? g->getBoard().getTileByIndex(selectedTile) : nullptr;
     if(sel){
         Rectangle ins{sb.x,sb.y+404,sb.width,106};
         DrawRectangleRounded({ins.x+8,ins.y,ins.width-16,ins.height},.14f,8,Fade(kAccent,.1f));

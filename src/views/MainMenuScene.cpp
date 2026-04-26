@@ -6,6 +6,7 @@
 #include "../../include/models/Player.hpp"
 #include "../../include/core/Account.hpp"
 #include "../../include/data-layer/ConfigComposer.hpp"
+#include "../../include/utils/BoardBuilder.hpp"
 #include "../../include/models/AbilityCard.hpp"
 #include "raylib.h"
 #include <algorithm>
@@ -119,8 +120,24 @@ void MainMenuScene::onStartGame() {
         // 6. Set TurnManager
         game->getTurnManager() = TurnManager(order, maxTurn);
 
-        // 7. Build board dari config (TODO: Board builder dari config)
-        // Untuk sekarang board kosong — nanti diisi ConfigLoader/BoardBuilder
+        // 7. Build board dari config
+        BoardBuilder::build(
+            game->getBoard(),
+            composer.getConfig().getPropertyConfigAll(),
+            composer.getConfig().getActionTileConfigAll(),
+            [&](){
+                std::map<int,int> m;
+                Config& c = composer.getConfig();
+                for(int i=1;i<=4;++i) m[i]=c.getRailroadRent(i);
+                return m;
+            }(),
+            [&](){
+                std::map<int,int> m;
+                Config& c = composer.getConfig();
+                for(int i=1;i<=2;++i) m[i]=c.getUtilityMultiplier(i);
+                return m;
+            }()
+        );
 
         // 8. Switch ke InGameScene
         showSetupModal = false;
