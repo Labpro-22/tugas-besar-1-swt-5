@@ -47,6 +47,8 @@ public:
     int getHouseBuildCost() const;
     int getHotelBuildCost() const;
     const std::vector<int>& getRentTable() const;
+    void cetakAkta() const;
+
 };
 
 #endif

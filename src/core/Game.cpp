@@ -123,17 +123,13 @@ void Game::startTurn() {
             } else if (cmd == "CETAK_AKTA") {
                 string code; ss >> code;
                 PropertyTile* pt = dynamic_cast<PropertyTile*>(board.getTileByCode(code));
-                if (!pt) cout << "Bukan petak properti.\n";
-                else cout << pt->toString() << "\n";
+                if (!pt) cout << "Petak \"" + code + "\" tidak ditemukan atau bukan properti.";
+                else pt->cetakAkta();
 
             } else if (cmd == "CETAK_LOG") {
                 int count = -1;
                 ss >> count;
-                if (count > 0) {
-                    logger.printLog(count);
-                } else {
-                    logger.printLog();
-                }
+                logger.printLog();
 
             } else if (cmd == "CETAK_KARTU") {
                 const auto& hand = current.getHandCards();
