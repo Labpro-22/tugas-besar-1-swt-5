@@ -1,7 +1,8 @@
 #include "../../include/core/LiquidationManager.hpp"
-#include "../../include/core/Player.hpp"
-#include "../../include/core/PropertyTile.hpp"
-#include "../../include/core/StreetTile.hpp"
+#include "../../include/models/Player.hpp"
+#include "../../include/models/AbilityCard.hpp"
+#include "../../include/utils/PropertyTile.hpp"
+#include "../../include/utils/StreetTile.hpp"
 #include "../../include/core/InvalidActionException.hpp"
 
 using namespace std;
@@ -13,7 +14,7 @@ int LiquidationManager::calculatePrice(const Player& player, const PropertyTile*
         return property->getMortgageValue(); 
     } 
     else if (action == LiquidationAction::SELL_TO_BANK) {
-        int price = property->getPurchasePrice();
+        int price = property->getLandPrice();
         
         const StreetTile* street = dynamic_cast<const StreetTile*>(property);
         if (street != nullptr) {
@@ -44,7 +45,7 @@ void LiquidationManager::liquidateAssets(Player& player, const vector<pair<Prope
             }
             
             prop->mortgage();
-            player.credit(funds);
+            player.receive(funds);
         } 
         
         else if (action == LiquidationAction::SELL_TO_BANK) {
@@ -53,8 +54,8 @@ void LiquidationManager::liquidateAssets(Player& player, const vector<pair<Prope
                 street->sellBuildingsToBank(); 
             }
             
-            player.credit(funds);
-            player.removeProperty(*prop);
+            player.receive(funds);
+            player.removeProperty(prop);
             
             prop->setOwner(nullptr); 
         }

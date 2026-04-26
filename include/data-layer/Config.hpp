@@ -31,6 +31,7 @@ private:
     vector<tuple<int, string, string, string, string>> actionTileConfig;
 
 public:
+    Config() = default;
     Config(
         vector<tuple<int, string, string, string, string, int, int, vector<int>>> propertyConfigs,
         map<int, int> railroadRentTable,

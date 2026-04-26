@@ -1,13 +1,20 @@
-#ifndef COREDUMMY_MOCK_GAME_FACADE_HPP
-#define COREDUMMY_MOCK_GAME_FACADE_HPP
+#ifndef REAL_GAME_FACADE_HPP
+#define REAL_GAME_FACADE_HPP
 
 #include <string>
 #include <vector>
-#include "IGameFacade.hpp"
+#include "../coredummy/IGameFacade.hpp"
+#include "../coredummy/GameViewModel.hpp"
+#include "../core/GameManager.hpp"
+#include "../core/AccountManager.hpp"
+#include "../data-layer/AccountDataManager.hpp"
+#include "../data-layer/ConfigComposer.hpp"
 
-class MockGameFacade : public IGameFacade {
+
+class RealGameFacade : public IGameFacade {
 public:
-    MockGameFacade();
+    RealGameFacade();
+    ~RealGameFacade() override = default;
 
     const GameViewModel& getViewModel() const override;
     void tick(float deltaSeconds) override;
@@ -34,19 +41,20 @@ public:
     void showVictoryPopup() override;
     void closeOverlay() override;
 
-private:
-    GameViewModel vm;
-    float elapsedSeconds = 0.0f;
-    int rollCounter = 0;
-    int salary = 200;
+    // Akses langsung ke GameManager dan AccountManager untuk InGameScene
+    GameManager& getGameManager() { return gameManager; }
+    AccountManager& getAccountManager() { return accountManager; }
 
-    void loadDummyBoard();
-    void addLog(const std::string& actor, const std::string& type, const std::string& detail);
-    void showOverlay(OverlayType type, const std::string& title, const std::vector<std::string>& lines, const std::string& footer);
-    void normalizeCurrentPlayer();
-    void applyDummyLandingEffect(PlayerViewData& player, int previousPosition, int diceTotal);
-    std::string tileKindToText(TileKind kind) const;
-    std::string propertyStatusToText(PropertyStatusView status) const;
+private:
+    GameManager gameManager;
+    AccountManager accountManager;
+    GameViewModel vm;
+
+    void rebuildViewModel();
+    void showOverlay(OverlayType type, const std::string& title,
+                     const std::vector<std::string>& lines,
+                     const std::string& footer);
+    TileKind tileKindFromCode(const std::string& code, const std::string& colorGroup) const;
 };
 
 #endif

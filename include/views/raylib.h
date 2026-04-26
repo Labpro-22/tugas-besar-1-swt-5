@@ -166,6 +166,7 @@ inline void DrawRectangleGradientV(int, int, int, int, Color, Color) {}
 inline void DrawRectanglePro(Rectangle, Vector2, float, Color) {}
 inline void DrawCircle(int, int, float, Color) {}
 inline void DrawCircleLines(int, int, float, Color) {}
+inline void DrawEllipse(int, int, float, float, Color) {}
 inline void DrawLineEx(Vector2, Vector2, float, Color) {}
 
 #endif

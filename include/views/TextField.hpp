@@ -11,6 +11,7 @@ public:
 
     void setPlaceholder(const std::string& value);
     void setContent(const std::string& value);
+    void setMaxLength(int value);
     const std::string& getContent() const;
     bool hasFocus() const;
 

@@ -1,4 +1,5 @@
 #include "../../include/core/GameManager.hpp"
+#include "../../include/models/AbilityCard.hpp"
 
 #include <fstream>
 #include "../../include/core/Game.hpp"

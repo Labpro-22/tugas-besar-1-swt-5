@@ -4,8 +4,8 @@
 #include "ActionTile.hpp"
 
 enum TaxType { 
-    PPH, 
-    PBM 
+    TAX_PPH, 
+    TAX_PBM 
 };
 
 class TaxTile : public ActionTile {

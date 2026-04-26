@@ -2,18 +2,19 @@
 
 #include <vector>
 #include <string>
+#include <utility>
 
-#include "Board.hpp"
-#include "Player.hpp"
+#include "../utils/Board.hpp"
+#include "../models/Player.hpp"
 #include "TurnManager.hpp"
-#include "Dice.hpp"
+#include "../models/Dice.hpp"
 #include "CardManager.hpp"
 #include "AuctionManager.hpp"
 #include "BankruptcyManager.hpp"
 #include "TradeManager.hpp"
 #include "LiquidationManager.hpp"
-#include "Logger.hpp"
-#include "Config.hpp"
+#include "../utils/Logger.hpp"
+#include "../data-layer/Config.hpp"
 
 using namespace std;
 
@@ -31,6 +32,7 @@ private:
     Logger logger;
     Config config;
     bool gameOver;
+    int lastDiceTotal;
     
 public:
     // Constructor
@@ -46,6 +48,19 @@ public:
     void handleLanding(Player& player); 
     void checkWinCondition();
     void executeCommand(const std::string& command);
+    std::pair<int, int> rollDiceForCurrentPlayer();
+    void endCurrentTurn();
+    bool buyCurrentProperty();
+    bool mortgageProperty(const std::string& code);
+    bool redeemProperty(const std::string& code);
+    bool buildProperty(const std::string& code);
+    void awardGoSalary(Player& player);
+    void payBankOrBankrupt(Player& player, int amount, const std::string& reason);
+    void payPlayerOrBankrupt(Player& payer, Player& receiver, int amount, const std::string& reason);
+    void declareBankruptToBank(Player& player);
+    void declareBankruptToPlayer(Player& player, Player& creditor);
+    void setLastDiceTotal(int total);
+    int getLastDiceTotal() const;
 
     // Getters / Setters    
     Board& getBoard();
@@ -61,6 +76,7 @@ public:
     Logger& getLogger();
     Config& getConfig();
 
+    void setConfig(const Config& cfg);
     bool isGameOver() const;
     void setGameOver(bool status);
 };

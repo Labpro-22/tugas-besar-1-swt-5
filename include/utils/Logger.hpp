@@ -14,5 +14,5 @@ public:
     void printLog();
     vector<LogEntry> getEntries();
     void clear();
-    void serialized();
+    std::string serialize() const;
 };

@@ -11,7 +11,7 @@ public:
     MainMenuScene(SceneManager* manager, IGameFacade* facade);
 
     void update() override;
-    void draw() override;
+    void draw()   override;
     void onEnter() override;
 
 private:
@@ -24,15 +24,17 @@ private:
     Button minusButton;
 
     std::vector<TextField> playerFields;
-    bool showNewGameModal;
-    int playerCount;
+    TextField configPathField;
+    std::string formError;
+    bool  showNewGameModal;
+    int   playerCount;
     float sceneTime;
     float modalVisibility;
 
     void layoutButtons(Rectangle screenRect);
+    void drawBackground(Rectangle screenRect);
     void drawHero(Rectangle screenRect);
     void drawFeatureCards(Rectangle screenRect);
-    void drawAmbientDetails(Rectangle screenRect);
     void drawNewGameModal(Rectangle screenRect);
 };
 

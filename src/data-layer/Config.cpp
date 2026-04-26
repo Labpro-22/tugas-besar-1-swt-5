@@ -51,8 +51,8 @@ int Config::getRailroadRent(int count)
     }
 
     if (count >= minQt && count <= maxQt) {
-        auto iter = railroadRentTable.find(count);
-        if (iter != railroadRentTable.end()){
+        auto iter = utilityMultiplier.find(count);
+        if (iter != utilityMultiplier.end()){
             return iter->second;
         }
     }

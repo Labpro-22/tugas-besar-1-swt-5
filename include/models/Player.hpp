@@ -4,10 +4,11 @@
 #include <string>
 #include <utility>
 #include <algorithm>
+#include "AbilityCard.hpp"
 
 class Game;
+class AuctionManager;
 class PropertyTile;
-class AbilityCard;
 class Account;
 
 enum class PlayerStatus {
@@ -34,6 +35,7 @@ private:
     int consecutiveDoubleCount;
 
 public:
+    friend class Game;
     Player(int id, Account* account, int money) : id(id), account(account), money(money), position(0), status(PlayerStatus::ACTIVE),
         ownedProperties(), handCards(), jailTurnsAttempted(0), usedAbilityThisTurn(false),
         shieldActive(false), discountPercent(0), discountDuration(0), consecutiveDoubleCount(0) {}
@@ -76,4 +78,7 @@ public:
     int getDiscountDuration() const { return discountDuration; }
     int getConsecutiveDoubleCount() const { return consecutiveDoubleCount; }
     const std::vector<std::unique_ptr<AbilityCard>>& getHandCards() const { return handCards; }
+    void setStatus(PlayerStatus s) { status = s; }
+    void addConsecutiveDouble() { consecutiveDoubleCount++; }
+    void resetConsecutiveDouble() { consecutiveDoubleCount = 0; }
 };

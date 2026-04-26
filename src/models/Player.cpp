@@ -1,7 +1,8 @@
 #include "../../include/models/Player.hpp"
-#include "../../include/models/Account.hpp"
+#include "../../include/core/Account.hpp"
 #include "../../include/models/AbilityCard.hpp"
 #include "../../include/utils/PropertyTile.hpp"
+#include "../../include/utils/StreetTile.hpp"
 #include "../../include/core/InsufficientFundException.hpp"
 #include "../../include/core/BankruptException.hpp"
 #include <stdexcept>
@@ -49,20 +50,35 @@ void Player::enterJail() {
 }
 void Player::releaseFromJail() {
     this->status = PlayerStatus::ACTIVE;
+    this->jailTurnsAttempted = 0;
 }
 void Player::incrementJailAttempt() {
     this->jailTurnsAttempted++;
 }
 void Player::resetTurnFlags() {
-    this->jailTurnsAttempted = 0;
     this->usedAbilityThisTurn = false;
-    this->consecutiveDoubleCount = 0;
+    this->shieldActive = false;
+    if (this->discountDuration > 0) {
+        this->discountDuration--;
+        if (this->discountDuration == 0) {
+            this->discountPercent = 0;
+        }
+    }
+    // consecutiveDoubleCount dan jailTurnsAttempted dikelola oleh Game/TurnManager
 }
 int Player::getTotalWealth() const {
     int wealth = money;
-    for (size_t i = 0; i < this->ownedProperties.size(); i++)
-    {
-        wealth += ownedProperties[i]->getLandPrice();
+    for (PropertyTile* tile : this->ownedProperties) {
+        // Semua properti dihitung dengan landPrice penuh (termasuk MORTGAGED)
+        wealth += tile->getLandPrice();
+        // Hitung nilai bangunan jika StreetTile
+        const StreetTile* street = dynamic_cast<const StreetTile*>(tile);
+        if (street != nullptr) {
+            wealth += street->getHouseCount() * street->getHouseBuildCost();
+            if (street->hasHotelBuilt()) {
+                wealth += street->getHotelBuildCost();
+            }
+        }
     }
     return wealth;
 }
@@ -92,7 +108,7 @@ std::string Player::getUsername() const {
     if (this->account == nullptr) {
         return "COM" + std::to_string(this->id);
     }
-    return this->account->getName();
+    return this->account->getUsername();
 }
 
 int Player::getId() const {

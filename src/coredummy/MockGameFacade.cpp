@@ -1,8 +1,10 @@
 #include "../../include/coredummy/MockGameFacade.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <sstream>
+#include <vector>
 #include "coredummy/DummyBoardFactory.hpp"
 
 namespace {
@@ -11,6 +13,18 @@ std::string sanitizeName(const std::string& value, int fallbackIndex) {
         return value;
     }
     return "Player " + std::to_string(fallbackIndex + 1);
+}
+
+std::string trimCopy(const std::string& value) {
+    std::size_t first = 0;
+    while (first < value.size() && std::isspace(static_cast<unsigned char>(value[first]))) {
+        ++first;
+    }
+    std::size_t last = value.size();
+    while (last > first && std::isspace(static_cast<unsigned char>(value[last - 1]))) {
+        --last;
+    }
+    return value.substr(first, last - first);
 }
 }
 
@@ -28,7 +42,40 @@ void MockGameFacade::tick(float deltaSeconds) {
     (void)elapsedSeconds;
 }
 
-void MockGameFacade::startNewGame(const std::vector<std::string>& playerNames) {
+std::string MockGameFacade::validateNewGameSettings(const std::vector<std::string>& playerNames,
+                                                    const std::string& configDirectory) const {
+    const int count = static_cast<int>(playerNames.size());
+    if (count < 2 || count > 4) {
+        return "Jumlah pemain harus 2 sampai 4.";
+    }
+    std::vector<std::string> seen;
+    for (int i = 0; i < count; ++i) {
+        const std::string name = trimCopy(playerNames[static_cast<std::size_t>(i)]);
+        if (name.empty()) {
+            return "Nama pemain " + std::to_string(i + 1) + " tidak boleh kosong.";
+        }
+        if (name.size() > 8) {
+            return "Nama pemain maksimal 8 karakter.";
+        }
+        if (std::find(seen.begin(), seen.end(), name) != seen.end()) {
+            return "Username " + name + " harus unik.";
+        }
+        seen.push_back(name);
+    }
+    if (trimCopy(configDirectory).empty()) {
+        return "Folder config tidak boleh kosong.";
+    }
+    return "";
+}
+
+bool MockGameFacade::startNewGame(const std::vector<std::string>& playerNames,
+                                  const std::string& configDirectory) {
+    std::string validationError = validateNewGameSettings(playerNames, configDirectory);
+    if (!validationError.empty()) {
+        vm.statusLine = validationError;
+        return false;
+    }
+
     if (vm.board.empty()) {
         loadDummyBoard();
     }
@@ -69,11 +116,12 @@ void MockGameFacade::startNewGame(const std::vector<std::string>& playerNames) {
     vm.footerHint = "Click a tile or press an action button. Logic is intentionally lightweight.";
     addLog("System", "NEW", "Dummy game created with " + std::to_string(count) + " players.");
     normalizeCurrentPlayer();
+    return true;
 }
 
 void MockGameFacade::loadDemoGame() {
     std::vector<std::string> names = {"Kebin", "Stewart", "Gro", "Bob"};
-    startNewGame(names);
+    startNewGame(names, "config/basic");
 
     if (vm.board.size() >= 40) {
         const std::vector<int> sampleOwned = {1, 3, 5, 12, 15, 19, 24, 31, 37, 39};
@@ -150,6 +198,81 @@ void MockGameFacade::advanceTurn() {
     }
     normalizeCurrentPlayer();
     addLog(vm.players[static_cast<std::size_t>(vm.currentPlayerIndex)].name, "TURN", "Turn moved to active player.");
+}
+
+void MockGameFacade::buyCurrentProperty() {
+    if (vm.players.empty() || vm.board.empty()) {
+        return;
+    }
+
+    PlayerViewData& player = vm.players[static_cast<std::size_t>(vm.currentPlayerIndex)];
+    TileViewData& tile = vm.board[static_cast<std::size_t>(player.position)];
+    if ((tile.kind == TileKind::Street || tile.kind == TileKind::Railroad || tile.kind == TileKind::Utility) &&
+        tile.ownerIndex < 0 && player.money >= tile.price) {
+        player.money -= tile.price;
+        tile.ownerIndex = vm.currentPlayerIndex;
+        tile.status = PropertyStatusView::Owned;
+        addLog(player.name, "BUY", "Bought " + tile.code + " for M" + std::to_string(tile.price) + ".");
+    } else {
+        addLog(player.name, "BUY_FAIL", "No available property to buy.");
+    }
+    normalizeCurrentPlayer();
+}
+
+void MockGameFacade::mortgageSelectedProperty() {
+    if (vm.players.empty() || vm.board.empty()) {
+        return;
+    }
+    TileViewData& tile = vm.board[static_cast<std::size_t>(vm.selectedTileIndex)];
+    if (tile.ownerIndex == vm.currentPlayerIndex && tile.status == PropertyStatusView::Owned) {
+        tile.status = PropertyStatusView::Mortgaged;
+        vm.players[static_cast<std::size_t>(vm.currentPlayerIndex)].money += tile.price / 2;
+        addLog(vm.players[static_cast<std::size_t>(vm.currentPlayerIndex)].name, "GADAI",
+               "Mortgaged " + tile.code + ".");
+        normalizeCurrentPlayer();
+    } else {
+        showOverlay(OverlayType::Info, "Gadai Gagal", {"Pilih properti milik pemain aktif."}, "");
+    }
+}
+
+void MockGameFacade::redeemSelectedProperty() {
+    if (vm.players.empty() || vm.board.empty()) {
+        return;
+    }
+    TileViewData& tile = vm.board[static_cast<std::size_t>(vm.selectedTileIndex)];
+    PlayerViewData& player = vm.players[static_cast<std::size_t>(vm.currentPlayerIndex)];
+    if (tile.ownerIndex == vm.currentPlayerIndex && tile.status == PropertyStatusView::Mortgaged &&
+        player.money >= tile.price) {
+        player.money -= tile.price;
+        tile.status = PropertyStatusView::Owned;
+        addLog(player.name, "TEBUS", "Redeemed " + tile.code + ".");
+        normalizeCurrentPlayer();
+    } else {
+        showOverlay(OverlayType::Info, "Tebus Gagal", {"Pilih properti tergadai dan pastikan uang cukup."}, "");
+    }
+}
+
+void MockGameFacade::buildSelectedProperty() {
+    if (vm.players.empty() || vm.board.empty()) {
+        return;
+    }
+    TileViewData& tile = vm.board[static_cast<std::size_t>(vm.selectedTileIndex)];
+    PlayerViewData& player = vm.players[static_cast<std::size_t>(vm.currentPlayerIndex)];
+    const int cost = std::max(50, tile.price / 2);
+    if (tile.ownerIndex == vm.currentPlayerIndex && tile.kind == TileKind::Street &&
+        tile.status == PropertyStatusView::Owned && !tile.hotel && player.money >= cost) {
+        player.money -= cost;
+        if (tile.houses < 4) {
+            ++tile.houses;
+        } else {
+            tile.houses = 0;
+            tile.hotel = true;
+        }
+        addLog(player.name, "BANGUN", "Built on " + tile.code + ".");
+        normalizeCurrentPlayer();
+    } else {
+        showOverlay(OverlayType::Info, "Bangun Gagal", {"Pilih street milik pemain aktif dan pastikan uang cukup."}, "");
+    }
 }
 
 void MockGameFacade::openSelectedTileDetails() {

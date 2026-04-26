@@ -11,7 +11,7 @@ class Player; // Kalau udah ada nanti tambahkan di include
 class Board {
 private:
     std::vector<Tile*> tilesVector;
-    std::map<std::string, int> codeToIndex;
+    std::map<std::string, std::vector<int>> codeToIndices;
 
 public:
     Board() = default;
@@ -21,6 +21,7 @@ public:
 
     Tile* getTileByIndex(int index) const;
     Tile* getTileByCode(const std::string& code) const;
+    std::vector<int> getTileIndicesByCode(const std::string& code) const;
 
     int calculateNewPosition(int pos, int step, bool& passedGo) const;
 

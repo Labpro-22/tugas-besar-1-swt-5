@@ -1,5 +1,7 @@
 #include "../../include/core/CardManager.hpp"
 #include "../../include/models/Player.hpp"
+#include "../../include/models/AbilityCard.hpp"
+#include "../../include/models/DerivedAbilityCard.hpp"
 #include <memory>
 
 CardManager::CardManager() {
