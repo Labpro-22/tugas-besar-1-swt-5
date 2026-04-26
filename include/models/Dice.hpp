@@ -4,6 +4,7 @@
 class Dice
 {
 private:
+    std::pair<int,int> rollResult;
     std::mt19937 randomizer;
     std::uniform_int_distribution<> picker;
     bool manualMode = false;
@@ -24,5 +25,9 @@ public:
     bool isDouble(std::pair<int, int> result) {
         auto [num1, num2] = result;
         return num1 == num2;  // double = kedua dadu nilainya sama
+    }
+    std::pair<int,int> getResult() const {
+        if (manualMode) return manualResult;
+        return rollResult;
     }
 };

@@ -396,3 +396,6 @@ Config& Game::getConfig() { return config; }
 void Game::setConfig(const Config& cfg) { config = cfg; }
 bool Game::isGameOver() const { return gameOver; }
 void Game::setGameOver(bool status) { gameOver = status; }
+void Game::giveSalary(Player& player) {
+    player.receive(config.getSpecialConfig(0));
+}

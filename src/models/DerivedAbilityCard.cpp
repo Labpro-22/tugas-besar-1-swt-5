@@ -1,4 +1,6 @@
 #include "../../include/models/DerivedAbilityCard.hpp"
+#include "../../include/core/Game.hpp"
+#include "../../include/data-layer/Config.hpp"
 
 std::string AbilityCard::escapeSerializedValue(const std::string& value)
 {
@@ -39,7 +41,14 @@ void MoveCard::setup() {
     description = "Maju " + std::to_string(steps) + " petak.";
 }
 void MoveCard::use(Player* target, Game* game) {
-    // TODO: MOVE PLAYER
+    auto board = game->getBoard();
+    bool pass = false;
+    int dest = board.calculateNewPosition(target->getPosition(), steps, pass);
+    target->moveTo(dest);
+    board.getTileByIndex(dest)->onLand(target, game);
+    if (pass) {
+        game->giveSalary(*target);
+    }
 }
 
 std::string MoveCard::serialize() const 
@@ -55,7 +64,7 @@ void DiscountCard::setup() {
     description = "Dapatkan diskon " + std::to_string(percentage) + "%% selama 1 giliran.";
 }
 void DiscountCard::use(Player* target, Game* game) {
-    // TODO: APPLY DISCOUNT
+    target->applyDiscount(percentage);
 }
 
 std::string DiscountCard::serialize() const
@@ -65,7 +74,7 @@ std::string DiscountCard::serialize() const
 
 ShieldCard::ShieldCard() : AbilityCard("ShieldCard", "Terlindung dari tagihan sewa maupun sanksi apapun yang merugikan selama 1 giliran.") {}
 void ShieldCard::use(Player* target, Game* game) {
-    // TODO: APPLY SHIELD
+    target->activateShield();
 }
 
 std::string ShieldCard::serialize() const

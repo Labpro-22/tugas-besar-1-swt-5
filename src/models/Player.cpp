@@ -11,6 +11,9 @@ void Player::moveTo(int position) {
     this->position = position;
 }
 void Player::pay(int amount) {
+    if (discountDuration > 0) {
+        amount = amount * (100 - discountPercent) / 100;
+    }
     if (amount > this->money) {
         if (this->ownedProperties.empty()) {
             throw BankruptException(1, "gagal bayar, ga punya properti juga");
@@ -117,4 +120,8 @@ int Player::getId() const {
 
 int Player::getPosition() const {
     return this->position;
+}
+void Player::applyDiscount(int percentage) {
+    discountPercent = percentage;
+    discountDuration = 1;
 }

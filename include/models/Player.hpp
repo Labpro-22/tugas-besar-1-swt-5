@@ -81,4 +81,8 @@ public:
     void setStatus(PlayerStatus s) { status = s; }
     void addConsecutiveDouble() { consecutiveDoubleCount++; }
     void resetConsecutiveDouble() { consecutiveDoubleCount = 0; }
+    void applyDiscount(int percentage);
+    void activateShield() {
+        shieldActive = true;
+    }
 };

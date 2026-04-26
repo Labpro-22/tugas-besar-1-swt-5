@@ -1,4 +1,5 @@
 #include "utils/RailroadTile.hpp"
+#include "../../include/models/Player.hpp"
 
 RailroadTile::RailroadTile(
     int id,
@@ -11,7 +12,16 @@ RailroadTile::RailroadTile(
 int RailroadTile::calculateRent(Player* visitor, Game* game) {
     (void) visitor;
     (void) game;
-    return calculateRentForRailroadCount(1) * getFestivalMultiplier();
+    Player * owner = this->owner;
+    auto props = owner->getOwnedProperties();
+    int count = 0;
+    for (auto prop : props) {
+        RailroadTile* rail = dynamic_cast<RailroadTile*>(prop);
+        if (rail != nullptr) {
+            count++;
+        }
+    }
+    return calculateRentForRailroadCount(count) * getFestivalMultiplier();
 }
 
 int RailroadTile::calculateRentForRailroadCount(int ownedRailroadCount) const {

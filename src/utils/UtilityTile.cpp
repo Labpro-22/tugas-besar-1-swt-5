@@ -1,4 +1,6 @@
 #include "utils/UtilityTile.hpp"
+#include "../../include/models/Dice.hpp"
+#include "../../include/core/Game.hpp"
 
 UtilityTile::UtilityTile(
     int id,
@@ -11,7 +13,17 @@ UtilityTile::UtilityTile(
 int UtilityTile::calculateRent(Player* visitor, Game* game) {
     (void) visitor;
     (void) game;
-    return calculateRentFromDice(0, 1) * getFestivalMultiplier();
+    Player* owner = this->owner;
+    auto props = owner->getOwnedProperties();
+    int count = 0;
+    for (auto prop : props) {
+        UtilityTile* rail = dynamic_cast<UtilityTile*>(prop);
+        if (rail != nullptr) {
+            count++;
+        }
+    }
+    auto [dice1, dice2] = game->getDice().getResult();
+    return calculateRentFromDice(dice1 + dice2, count) * getFestivalMultiplier();
 }
 
 int UtilityTile::calculateRentFromDice(int diceTotal, int ownedUtilityCount) const {

@@ -44,6 +44,7 @@ public:
     void startTurn();
     void endTurn();
     void handleLanding(Player& player); 
+    void giveSalary(Player& player);
     void checkWinCondition();
     void executeCommand(const std::string& command);
 
