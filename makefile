@@ -56,7 +56,48 @@ SRCS := \
 	$(SRC_DIR)/views/InGameScene.cpp \
 	$(SRC_DIR)/views/Nimonspoli.cpp \
 	$(SRC_DIR)/coredummy/DummyBoardFactory.cpp \
-	$(SRC_DIR)/coredummy/MockGameFacade.cpp
+	$(SRC_DIR)/coredummy/MockGameFacade.cpp \
+	$(SRC_DIR)/core/RealGameFacade.cpp \
+	$(SRC_DIR)/core/Account.cpp \
+	$(SRC_DIR)/core/AccountManager.cpp \
+	$(SRC_DIR)/core/AuctionManager.cpp \
+	$(SRC_DIR)/core/BankruptException.cpp \
+	$(SRC_DIR)/core/BankruptcyManager.cpp \
+	$(SRC_DIR)/core/CardManager.cpp \
+	$(SRC_DIR)/core/Game.cpp \
+	$(SRC_DIR)/core/GameException.cpp \
+	$(SRC_DIR)/core/GameManager.cpp \
+	$(SRC_DIR)/core/InsufficientFundException.cpp \
+	$(SRC_DIR)/core/InvalidAuctionException.cpp \
+	$(SRC_DIR)/core/LiquidationManager.cpp \
+	$(SRC_DIR)/core/TradeManager.cpp \
+	$(SRC_DIR)/core/TurnManager.cpp \
+	$(SRC_DIR)/utils/ActionTile.cpp \
+	$(SRC_DIR)/utils/Board.cpp \
+	$(SRC_DIR)/utils/CardTile.cpp \
+	$(SRC_DIR)/utils/FestivalTile.cpp \
+	$(SRC_DIR)/utils/LogEntry.cpp \
+	$(SRC_DIR)/utils/Logger.cpp \
+	$(SRC_DIR)/utils/PropertyTile.cpp \
+	$(SRC_DIR)/utils/RailroadTile.cpp \
+	$(SRC_DIR)/utils/SpecialTile.cpp \
+	$(SRC_DIR)/utils/StreetTile.cpp \
+	$(SRC_DIR)/utils/TaxTile.cpp \
+	$(SRC_DIR)/utils/Tile.cpp \
+	$(SRC_DIR)/utils/UtilityTile.cpp \
+	$(SRC_DIR)/models/AbilityCard.cpp \
+	$(SRC_DIR)/models/AbilityCardDeck.cpp \
+	$(SRC_DIR)/models/ChanceCard.cpp \
+	$(SRC_DIR)/models/CommunityChestCard.cpp \
+	$(SRC_DIR)/models/DerivedAbilityCard.cpp \
+	$(SRC_DIR)/models/Player.cpp \
+	$(SRC_DIR)/models/TradeToPlayer.cpp \
+	$(SRC_DIR)/data-layer/AccountDataManager.cpp \
+	$(SRC_DIR)/data-layer/Config.cpp \
+	$(SRC_DIR)/data-layer/ConfigComposer.cpp \
+	$(SRC_DIR)/data-layer/ConfigHandler.cpp \
+	$(SRC_DIR)/data-layer/FileIOException.cpp \
+	$(SRC_DIR)/data-layer/GameStateSaver.cpp
 
 OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS))
 
