@@ -3,7 +3,7 @@
 
 #include <memory>
 #include "SceneManager.hpp"
-#include "../core/IGameFacade.hpp"
+#include "../coredummy/IGameFacade.hpp"
 
 class Nimonspoli {
 public:

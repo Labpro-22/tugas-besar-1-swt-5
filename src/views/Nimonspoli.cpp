@@ -1,8 +1,8 @@
 #include "../../include/views/Nimonspoli.hpp"
 
 #include "raylib.h"
-#include "../../include/core/IGameFacade.hpp"
-#include "../../include/core/MockGameFacade.hpp"
+#include "../../include/coredummy/IGameFacade.hpp"
+#include "../../include/coredummy/MockGameFacade.hpp"
 
 Nimonspoli::~Nimonspoli() = default;
 

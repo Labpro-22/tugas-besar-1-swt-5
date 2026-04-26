@@ -4,7 +4,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
-#include "../../include/core/IGameFacade.hpp"
+#include "../../include/coredummy/IGameFacade.hpp"
 #include "../../include/views/SceneManager.hpp"
 
 namespace {

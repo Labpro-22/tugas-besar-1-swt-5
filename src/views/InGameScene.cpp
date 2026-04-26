@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "../../include/core/GameViewModel.hpp"
-#include "../../include/core/IGameFacade.hpp"
+#include "../../include/coredummy/GameViewModel.hpp"
+#include "../../include/coredummy/IGameFacade.hpp"
 #include "../../include/views/SceneManager.hpp"
 
 namespace {

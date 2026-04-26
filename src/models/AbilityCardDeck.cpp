@@ -33,7 +33,14 @@ AbilityCardDeck::AbilityCardDeck() {
 
 AbilityCardDeck::AbilityCardDeck(std::vector<std::unique_ptr<AbilityCard>> drawPile,
     std::vector<std::unique_ptr<AbilityCard>> discardedPile)
-    : drawPile(drawPile), discardedPile(discardedPile) {}
+    : drawPile(std::move(drawPile)), discardedPile(std::move(discardedPile)) {}
+
+AbilityCardDeck::AbilityCardDeck(AbilityCardDeck& other) {
+    this->drawPile = std::move(other.drawPile);
+    this->discardedPile = std::move(other.discardedPile);
+    other.discardedPile.clear();
+    other.drawPile.clear();
+}
 
 std::unique_ptr<AbilityCard> AbilityCardDeck::draw() {
     if (this->drawPile.empty()) {

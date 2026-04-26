@@ -3,16 +3,22 @@
 #include <memory>
 
 CardManager::CardManager() {
-    std::vector<ChanceCard> chancePile({
-        StepbackCard(),
-        RailroadCard(),
-        GoToJailCard()
+    static StepbackCard stepbackCard;
+    static RailroadCard railroadCard;
+    static GoToJailCard goToJailCard;
+    std::vector<ChanceCard*> chancePile({
+        &stepbackCard,
+        &railroadCard,
+        &goToJailCard
     });
     this->chanceDeck = DrawCardDeck<ChanceCard>(chancePile);
-    std::vector<CommunityChestCard> communityPile({
-        BirthdayCard(),
-        PayDoctorCard(),
-        NyalegCard()
+    static BirthdayCard birthdayCard;
+    static PayDoctorCard payDoctorCard;
+    static NyalegCard nyalegCard;
+    std::vector<CommunityChestCard*> communityPile({
+        &birthdayCard,
+        &payDoctorCard,
+        &nyalegCard
     });
     this->communityDeck = DrawCardDeck<CommunityChestCard>(communityPile);    
 }
