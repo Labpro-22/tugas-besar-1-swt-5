@@ -78,6 +78,9 @@ InGameScene::InGameScene(SceneManager* manager, IGameFacade* facade)
     const std::vector<std::pair<std::string, std::function<void()>>> specs = {
         {"Lempar Dadu", [this]() { gameFacade->rollDice(); }},
         {"Beli", [this]() { gameFacade->buyCurrentProperty(); }},
+        {"Gadai", [this]() { gameFacade->mortgageSelectedProperty(); }},
+        {"Tebus", [this]() { gameFacade->redeemSelectedProperty(); }},
+        {"Bangun", [this]() { gameFacade->buildSelectedProperty(); }},
         {"Info Petak", [this]() { gameFacade->openSelectedTileDetails(); }},
         {"Properti", [this]() { gameFacade->showCurrentPlayerProperties(); }},
         {"Kartu", [this]() { gameFacade->showCardPopup(); }},
@@ -326,9 +329,9 @@ void InGameScene::drawSidebar(const Rectangle& sidebarRect) {
 
     for (Button& button : actionButtons) button.draw();
 
-    DrawText("Semua Pemain",static_cast<int>(sidebarRect.x + 16),static_cast<int>(sidebarRect.y + 560),22,kText);
+    DrawText("Semua Pemain",static_cast<int>(sidebarRect.x + 16),static_cast<int>(sidebarRect.y + 640),22,kText);
     for (std::size_t i = 0; i < vm.players.size(); ++i) {
-        float py = sidebarRect.y + 592.0f + i * 28.0f;
+        float py = sidebarRect.y + 672.0f + i * 28.0f;
         DrawCircle(static_cast<int>(sidebarRect.x + 20),static_cast<int>(py + 8),6,kTokens[i % kTokens.size()]);
         const PlayerViewData& p = vm.players[i];
         std::string row = p.name + " M" + std::to_string(p.money);
@@ -336,11 +339,11 @@ void InGameScene::drawSidebar(const Rectangle& sidebarRect) {
         DrawText(row.c_str(),static_cast<int>(sidebarRect.x + 36),static_cast<int>(py),17,p.isCurrent ? kText : kSubtext);
     }
 
-    DrawText("Log Terbaru",static_cast<int>(sidebarRect.x + 16),static_cast<int>(sidebarRect.y + 722),22,kText);
+    DrawText("Log Terbaru",static_cast<int>(sidebarRect.x + 16),static_cast<int>(sidebarRect.y + 790),22,kText);
     int logCount = std::min<int>(4, static_cast<int>(vm.logs.size()));
     for (int i = 0; i < logCount; ++i) {
         const LogEntryViewData& entry = vm.logs[static_cast<std::size_t>(i)];
-        float y = sidebarRect.y + 754.0f + i * 40.0f;
+        float y = sidebarRect.y + 822.0f + i * 40.0f;
         DrawText(("[T" + std::to_string(entry.turn) + "] " + entry.actor + " | " + entry.type).c_str(),
                  static_cast<int>(sidebarRect.x + 16),static_cast<int>(y),16,kText);
         DrawText(entry.detail.c_str(),static_cast<int>(sidebarRect.x + 16),static_cast<int>(y + 17),15,kSubtext);

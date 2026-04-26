@@ -11,12 +11,18 @@ public:
 
     const GameViewModel& getViewModel() const override;
     void tick(float deltaSeconds) override;
-    void startNewGame(const std::vector<std::string>& playerNames) override;
+    std::string validateNewGameSettings(const std::vector<std::string>& playerNames,
+                                        const std::string& configDirectory) const override;
+    bool startNewGame(const std::vector<std::string>& playerNames,
+                      const std::string& configDirectory) override;
     void loadDemoGame() override;
     void selectTile(int index) override;
     void rollDice() override;
     void advanceTurn() override;
     void buyCurrentProperty() override;
+    void mortgageSelectedProperty() override;
+    void redeemSelectedProperty() override;
+    void buildSelectedProperty() override;
 
     void openSelectedTileDetails() override;
     void showCurrentPlayerProperties() override;

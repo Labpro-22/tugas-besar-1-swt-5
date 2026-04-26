@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <string>
 #include <vector>
 
@@ -35,6 +36,38 @@ void drawFlower(float cx, float cy, float r, float angle, float alpha) {
     DrawCircle(static_cast<int>(cx), static_cast<int>(cy), r * 0.7f, Fade(kAccent, alpha));
     DrawCircle(static_cast<int>(cx), static_cast<int>(cy), r * 0.35f, Fade({255,160,30,255}, alpha));
 }
+
+std::string trimCopy(const std::string& value) {
+    std::size_t first = 0;
+    while (first < value.size() && std::isspace(static_cast<unsigned char>(value[first]))) {
+        ++first;
+    }
+    std::size_t last = value.size();
+    while (last > first && std::isspace(static_cast<unsigned char>(value[last - 1]))) {
+        --last;
+    }
+    return value.substr(first, last - first);
+}
+
+std::string oneLineCopy(std::string value) {
+    for (char& ch : value) {
+        if (ch == '\n' || ch == '\r' || ch == '\t') {
+            ch = ' ';
+        }
+    }
+    return value;
+}
+
+std::string fitText(std::string value, int fontSize, int maxWidth) {
+    value = oneLineCopy(value);
+    if (MeasureText(value.c_str(), fontSize) <= maxWidth) {
+        return value;
+    }
+    while (!value.empty() && MeasureText((value + "...").c_str(), fontSize) > maxWidth) {
+        value.pop_back();
+    }
+    return value + "...";
+}
 }
 
 MainMenuScene::MainMenuScene(SceneManager* manager, IGameFacade* facade)
@@ -46,6 +79,7 @@ MainMenuScene::MainMenuScene(SceneManager* manager, IGameFacade* facade)
       cancelButton("Batal", kMuted, kText),
       plusButton("+", kAccentAlt, {255,255,255,255}),
       minusButton("-", kAccentAlt, {255,255,255,255}),
+      configPathField("Folder Config"),
       showNewGameModal(false),
       playerCount(4),
       sceneTime(0.0f),
@@ -55,23 +89,55 @@ MainMenuScene::MainMenuScene(SceneManager* manager, IGameFacade* facade)
     playerFields.emplace_back("Nama Pemain 2");
     playerFields.emplace_back("Nama Pemain 3");
     playerFields.emplace_back("Nama Pemain 4");
+    for (TextField& field : playerFields) {
+        field.setMaxLength(8);
+    }
+    configPathField.setContent("config/basic");
+    configPathField.setMaxLength(120);
 
-    newGameButton.setOnClick([this]() { showNewGameModal = true; });
+    newGameButton.setOnClick([this]() {
+        showNewGameModal = true;
+        formError.clear();
+        if (trimCopy(configPathField.getContent()).empty()) {
+            configPathField.setContent("config/basic");
+        }
+    });
     loadDemoButton.setOnClick([this]() {
         gameFacade->loadDemoGame();
         sceneManager->setScene(SceneType::InGame);
     });
     quitButton.setOnClick([]() { CloseWindow(); });
-    cancelButton.setOnClick([this]() { showNewGameModal = false; });
-    plusButton.setOnClick([this]() { playerCount = std::min(4, playerCount + 1); });
-    minusButton.setOnClick([this]() { playerCount = std::max(2, playerCount - 1); });
+    cancelButton.setOnClick([this]() {
+        showNewGameModal = false;
+        formError.clear();
+    });
+    plusButton.setOnClick([this]() {
+        playerCount = std::min(4, playerCount + 1);
+        formError.clear();
+    });
+    minusButton.setOnClick([this]() {
+        playerCount = std::max(2, playerCount - 1);
+        formError.clear();
+    });
     startGameButton.setOnClick([this]() {
         std::vector<std::string> names;
         for (int i = 0; i < playerCount; ++i) {
-            names.push_back(playerFields[static_cast<std::size_t>(i)].getContent());
+            names.push_back(trimCopy(playerFields[static_cast<std::size_t>(i)].getContent()));
         }
-        gameFacade->startNewGame(names);
+        const std::string configDirectory = trimCopy(configPathField.getContent());
+        formError = gameFacade->validateNewGameSettings(names, configDirectory);
+        if (!formError.empty()) {
+            return;
+        }
+        if (!gameFacade->startNewGame(names, configDirectory)) {
+            formError = oneLineCopy(gameFacade->getViewModel().statusLine);
+            if (formError.empty()) {
+                formError = "Gagal membuat game baru.";
+            }
+            return;
+        }
         showNewGameModal = false;
+        formError.clear();
         sceneManager->setScene(SceneType::InGame);
     });
 }
@@ -80,6 +146,7 @@ void MainMenuScene::onEnter() {
     sceneTime = 0.0f;
     showNewGameModal = false;
     modalVisibility = 0.0f;
+    formError.clear();
 }
 
 void MainMenuScene::layoutButtons(Rectangle screenRect) {
@@ -101,6 +168,7 @@ void MainMenuScene::update() {
     modalVisibility = easeTowards(modalVisibility, showNewGameModal ? 1.0f : 0.0f, GetFrameTime() * 9.0f);
     if (IsKeyPressed(KEY_ESCAPE) && showNewGameModal) {
         showNewGameModal = false;
+        formError.clear();
     }
 
     if (modalVisibility < 0.02f) {
@@ -117,6 +185,7 @@ void MainMenuScene::update() {
     for (int i = 0; i < playerCount; ++i) {
         playerFields[static_cast<std::size_t>(i)].update();
     }
+    configPathField.update();
 }
 
 void MainMenuScene::drawBackground(Rectangle screenRect) {
@@ -166,8 +235,8 @@ void MainMenuScene::drawNewGameModal(Rectangle screenRect) {
 
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(kText, 0.35f * modalVisibility));
     Rectangle modal{screenRect.width * 0.5f - 300.0f,
-                    screenRect.height * 0.5f - 250.0f + (1.0f - modalVisibility) * 28.0f,
-                    600.0f, 500.0f};
+                    screenRect.height * 0.5f - 280.0f + (1.0f - modalVisibility) * 28.0f,
+                    600.0f, 560.0f};
     DrawRectangleRounded({modal.x + 6, modal.y + 10, modal.width, modal.height}, 0.1f, 12, Fade(kText, 0.1f));
     DrawRectangleRounded(modal, 0.1f, 12, Fade({250,255,235,255}, modalVisibility));
     DrawRectangleRoundedLinesEx(modal, 0.1f, 12, 2.5f, Fade(kPanelBorder, modalVisibility));
@@ -189,6 +258,15 @@ void MainMenuScene::drawNewGameModal(Rectangle screenRect) {
             DrawRectangleRounded({modal.x + 26, fy, modal.width - 52, 44}, 0.22f, 8, Fade(kText, 0.3f));
             DrawText("tidak digunakan", static_cast<int>(modal.x + modal.width - 180), static_cast<int>(fy + 12), 18, Fade(kMuted, 0.9f));
         }
+    }
+
+    DrawText("Folder Config:", static_cast<int>(modal.x + 26), static_cast<int>(modal.y + 374), 20, kText);
+    configPathField.setBoundary({modal.x + 26, modal.y + 402, modal.width - 52, 44});
+    configPathField.draw();
+
+    if (!formError.empty()) {
+        const std::string shownError = fitText(formError, 18, static_cast<int>(modal.width - 52));
+        DrawText(shownError.c_str(), static_cast<int>(modal.x + 26), static_cast<int>(modal.y + 456), 18, kDanger);
     }
 
     startGameButton.setBoundary({modal.x + modal.width - 220, modal.y + modal.height - 70, 156, 50});

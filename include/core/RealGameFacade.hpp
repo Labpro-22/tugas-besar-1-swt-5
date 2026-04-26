@@ -10,8 +10,7 @@
 #include "../data-layer/AccountDataManager.hpp"
 #include "../data-layer/ConfigComposer.hpp"
 
-// RealGameFacade mengimplementasi IGameFacade yang sama dengan MockGameFacade,
-// sehingga UI Layer tidak perlu diubah sama sekali — hanya swap facade-nya.
+
 class RealGameFacade : public IGameFacade {
 public:
     RealGameFacade();
@@ -19,12 +18,18 @@ public:
 
     const GameViewModel& getViewModel() const override;
     void tick(float deltaSeconds) override;
-    void startNewGame(const std::vector<std::string>& playerNames) override;
+    std::string validateNewGameSettings(const std::vector<std::string>& playerNames,
+                                        const std::string& configDirectory) const override;
+    bool startNewGame(const std::vector<std::string>& playerNames,
+                      const std::string& configDirectory) override;
     void loadDemoGame() override;
     void selectTile(int index) override;
     void rollDice() override;
     void advanceTurn() override;
     void buyCurrentProperty() override;
+    void mortgageSelectedProperty() override;
+    void redeemSelectedProperty() override;
+    void buildSelectedProperty() override;
 
     void openSelectedTileDetails() override;
     void showCurrentPlayerProperties() override;

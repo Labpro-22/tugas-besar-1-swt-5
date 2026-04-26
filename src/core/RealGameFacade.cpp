@@ -15,9 +15,35 @@
 #include <vector>
 #include <sstream>
 #include <algorithm>
+#include <cctype>
 #include <exception>
 #include <map>
 #include <stdexcept>
+
+namespace {
+std::string trimCopy(const std::string& value) {
+    std::size_t first = 0;
+    while (first < value.size() && std::isspace(static_cast<unsigned char>(value[first]))) {
+        ++first;
+    }
+    std::size_t last = value.size();
+    while (last > first && std::isspace(static_cast<unsigned char>(value[last - 1]))) {
+        --last;
+    }
+    return value.substr(first, last - first);
+}
+
+std::string joinConfigPath(const std::string& directory, const std::string& fileName) {
+    if (directory.empty()) {
+        return fileName;
+    }
+    const char last = directory[directory.size() - 1];
+    if (last == '/' || last == '\\') {
+        return directory + fileName;
+    }
+    return directory + "/" + fileName;
+}
+}
 
 RealGameFacade::RealGameFacade() {
     vm.statusLine = "Nimonspoli siap. Mulai permainan baru atau muat savefile.";
@@ -32,21 +58,65 @@ void RealGameFacade::tick(float) {
     // Tidak dibutuhkan di real game (game loop dikelola Game::run)
 }
 
-void RealGameFacade::startNewGame(const std::vector<std::string>& playerNames) {
+std::string RealGameFacade::validateNewGameSettings(const std::vector<std::string>& playerNames,
+                                                    const std::string& configDirectory) const {
+    const int count = static_cast<int>(playerNames.size());
+    if (count < 2 || count > 4) {
+        return "Jumlah pemain harus 2 sampai 4.";
+    }
+
+    std::vector<std::string> seen;
+    for (int i = 0; i < count; ++i) {
+        const std::string name = trimCopy(playerNames[static_cast<std::size_t>(i)]);
+        if (name.empty()) {
+            return "Nama pemain " + std::to_string(i + 1) + " tidak boleh kosong.";
+        }
+        if (name.size() > 8) {
+            return "Nama pemain maksimal 8 karakter.";
+        }
+        if (std::find(seen.begin(), seen.end(), name) != seen.end()) {
+            return "Username " + name + " harus unik.";
+        }
+        if (accountManager.isUsernameTaken(name)) {
+            return "Username " + name + " sudah digunakan.";
+        }
+        seen.push_back(name);
+    }
+
+    if (trimCopy(configDirectory).empty()) {
+        return "Folder config tidak boleh kosong.";
+    }
+
+    return "";
+}
+
+bool RealGameFacade::startNewGame(const std::vector<std::string>& playerNames,
+                                  const std::string& configDirectory) {
+    const std::string validationError = validateNewGameSettings(playerNames, configDirectory);
+    if (!validationError.empty()) {
+        vm.statusLine = validationError;
+        showOverlay(OverlayType::Info, "Input Tidak Valid", {validationError}, "");
+        return false;
+    }
+
+    const std::string configRoot = trimCopy(configDirectory);
     try {
         ConfigComposer composer(
-            "config/basic/property.txt",
-            "config/basic/railroad.txt",
-            "config/basic/utility.txt",
-            "config/basic/tax.txt",
-            "config/basic/aksi.txt",
-            "config/basic/special.txt",
-            "config/basic/misc.txt"
+            joinConfigPath(configRoot, "property.txt"),
+            joinConfigPath(configRoot, "railroad.txt"),
+            joinConfigPath(configRoot, "utility.txt"),
+            joinConfigPath(configRoot, "tax.txt"),
+            joinConfigPath(configRoot, "aksi.txt"),
+            joinConfigPath(configRoot, "special.txt"),
+            joinConfigPath(configRoot, "misc.txt")
         );
 
         gameManager.startNewGame();
         Game* game = gameManager.getCurrentGame();
-        if (!game) return;
+        if (!game) {
+            vm.statusLine = "Gagal membuat game baru.";
+            return false;
+        }
         game->setConfig(composer.getConfig());
 
         BoardBuilder::build(
@@ -80,8 +150,7 @@ void RealGameFacade::startNewGame(const std::vector<std::string>& playerNames) {
         std::vector<int> order;
         int count = std::max(2, std::min(4, static_cast<int>(playerNames.size())));
         for (int i = 0; i < count; ++i) {
-            std::string name = playerNames[static_cast<size_t>(i)];
-            if (name.empty()) name = "Player " + std::to_string(i + 1);
+            std::string name = trimCopy(playerNames[static_cast<size_t>(i)]);
             Account acc(name, "pass", 0);
             accountManager.addAccount(acc);
             Account* accPtr = accountManager.getAccount(name, "pass");
@@ -93,16 +162,18 @@ void RealGameFacade::startNewGame(const std::vector<std::string>& playerNames) {
         rebuildViewModel();
         vm.statusLine = "Permainan dimulai! Board: " + std::to_string(game->getBoard().size()) + " petak.";
         vm.footerHint = "Klik Roll Dice untuk melempar dadu.";
+        return true;
     } catch (const std::exception& e) {
         vm = GameViewModel{};
-        showOverlay(OverlayType::Info, "Gagal Membuat Game", {e.what()}, "Periksa file config/basic.");
+        showOverlay(OverlayType::Info, "Gagal Membuat Game", {e.what()}, "Periksa folder config: " + configRoot);
         vm.statusLine = std::string("Config gagal: ") + e.what();
+        return false;
     }
 }
 
 void RealGameFacade::loadDemoGame() {
     // Demo: mulai game dengan 4 pemain default
-    startNewGame({"Kebin", "Stewart", "Gro", "Bob"});
+    startNewGame({"Kebin", "Stewart", "Gro", "Bob"}, "config/basic");
 }
 
 void RealGameFacade::selectTile(int index) {
@@ -140,6 +211,51 @@ void RealGameFacade::buyCurrentProperty() {
     rebuildViewModel();
     showOverlay(OverlayType::Info, ok ? "Pembelian Berhasil" : "Pembelian Gagal",
                 {ok ? "Properti berhasil dibeli." : "Tidak ada properti bank yang bisa dibeli atau uang tidak cukup."},
+                "");
+}
+
+void RealGameFacade::mortgageSelectedProperty() {
+    Game* game = gameManager.getCurrentGame();
+    if (!game || game->isGameOver() || vm.selectedTileIndex < 0 ||
+        vm.selectedTileIndex >= static_cast<int>(vm.board.size())) {
+        return;
+    }
+    const std::string code = vm.board[static_cast<std::size_t>(vm.selectedTileIndex)].code;
+    bool ok = game->mortgageProperty(code);
+    rebuildViewModel();
+    showOverlay(OverlayType::Info, ok ? "Gadai Berhasil" : "Gadai Gagal",
+                {ok ? "Properti " + code + " berhasil digadaikan."
+                    : "Pilih properti milik pemain aktif yang boleh digadaikan."},
+                "");
+}
+
+void RealGameFacade::redeemSelectedProperty() {
+    Game* game = gameManager.getCurrentGame();
+    if (!game || game->isGameOver() || vm.selectedTileIndex < 0 ||
+        vm.selectedTileIndex >= static_cast<int>(vm.board.size())) {
+        return;
+    }
+    const std::string code = vm.board[static_cast<std::size_t>(vm.selectedTileIndex)].code;
+    bool ok = game->redeemProperty(code);
+    rebuildViewModel();
+    showOverlay(OverlayType::Info, ok ? "Tebus Berhasil" : "Tebus Gagal",
+                {ok ? "Properti " + code + " berhasil ditebus."
+                    : "Pilih properti tergadai milik pemain aktif dan pastikan uang cukup."},
+                "");
+}
+
+void RealGameFacade::buildSelectedProperty() {
+    Game* game = gameManager.getCurrentGame();
+    if (!game || game->isGameOver() || vm.selectedTileIndex < 0 ||
+        vm.selectedTileIndex >= static_cast<int>(vm.board.size())) {
+        return;
+    }
+    const std::string code = vm.board[static_cast<std::size_t>(vm.selectedTileIndex)].code;
+    bool ok = game->buildProperty(code);
+    rebuildViewModel();
+    showOverlay(OverlayType::Info, ok ? "Bangun Berhasil" : "Bangun Gagal",
+                {ok ? "Bangunan di " + code + " berhasil ditingkatkan."
+                    : "Pilih street milik pemain aktif dan pastikan syarat bangun terpenuhi."},
                 "");
 }
 

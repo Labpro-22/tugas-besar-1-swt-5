@@ -15,6 +15,13 @@ void TextField::setContent(const std::string& value) {
     text = value.substr(0, static_cast<std::size_t>(maxLength));
 }
 
+void TextField::setMaxLength(int value) {
+    maxLength = value < 0 ? 0 : value;
+    if (static_cast<int>(text.size()) > maxLength) {
+        text = text.substr(0, static_cast<std::size_t>(maxLength));
+    }
+}
+
 const std::string& TextField::getContent() const {
     return text;
 }
@@ -53,11 +60,20 @@ void TextField::draw() {
 
     const bool empty = text.empty();
     const std::string& shown = empty ? placeholder : text;
+    std::string visible = shown;
+    const int fontSize = 22;
+    const int maxTextWidth = static_cast<int>(boundingBox.width - 32.0f);
+    if (!empty && MeasureText(visible.c_str(), fontSize) > maxTextWidth) {
+        while (!visible.empty() && MeasureText(("..." + visible).c_str(), fontSize) > maxTextWidth) {
+            visible.erase(visible.begin());
+        }
+        visible = "..." + visible;
+    }
     const Color tint = empty ? Color{150, 160, 205, 255} : Color{242, 245, 255, 255};
-    DrawText(shown.c_str(), static_cast<int>(boundingBox.x + 16.0f), static_cast<int>(boundingBox.y + 15.0f), 22, tint);
+    DrawText(visible.c_str(), static_cast<int>(boundingBox.x + 16.0f), static_cast<int>(boundingBox.y + 15.0f), fontSize, tint);
 
     if (isActive && (static_cast<int>(GetTime() * 2.0) % 2 == 0)) {
-        const int width = MeasureText(text.c_str(), 22);
+        const int width = MeasureText(visible.c_str(), fontSize);
         const float lineX = boundingBox.x + 16.0f + static_cast<float>(width) + 2.0f;
         DrawLineEx({lineX, boundingBox.y + 14.0f}, {lineX, boundingBox.y + boundingBox.height - 14.0f}, 2.0f, WHITE);
     }

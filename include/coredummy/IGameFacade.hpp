@@ -11,12 +11,18 @@ public:
 
     virtual const GameViewModel& getViewModel() const = 0;
     virtual void tick(float deltaSeconds) = 0;
-    virtual void startNewGame(const std::vector<std::string>& playerNames) = 0;
+    virtual std::string validateNewGameSettings(const std::vector<std::string>& playerNames,
+                                                const std::string& configDirectory) const = 0;
+    virtual bool startNewGame(const std::vector<std::string>& playerNames,
+                              const std::string& configDirectory) = 0;
     virtual void loadDemoGame() = 0;
     virtual void selectTile(int index) = 0;
     virtual void rollDice() = 0;
     virtual void advanceTurn() = 0;
     virtual void buyCurrentProperty() = 0;
+    virtual void mortgageSelectedProperty() = 0;
+    virtual void redeemSelectedProperty() = 0;
+    virtual void buildSelectedProperty() = 0;
 
     virtual void openSelectedTileDetails() = 0;
     virtual void showCurrentPlayerProperties() = 0;

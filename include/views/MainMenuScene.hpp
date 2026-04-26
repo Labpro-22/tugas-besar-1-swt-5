@@ -24,6 +24,8 @@ private:
     Button minusButton;
 
     std::vector<TextField> playerFields;
+    TextField configPathField;
+    std::string formError;
     bool  showNewGameModal;
     int   playerCount;
     float sceneTime;
