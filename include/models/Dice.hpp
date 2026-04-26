@@ -23,6 +23,6 @@ public:
     }
     bool isDouble(std::pair<int, int> result) {
         auto [num1, num2] = result;
-        return num1 == num2;  // double = kedua dadu nilainya sama
+        return num1 == num2;
     }
 };
