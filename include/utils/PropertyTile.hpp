@@ -50,6 +50,7 @@ public:
     virtual bool canBeMortgaged(Game* game) const;
 
     bool isOwnable() const override;
+    virtual void cetakAkta() const;
 };
 
 #endif

@@ -1,6 +1,8 @@
 #include "utils/StreetTile.hpp"
 #include <algorithm>
 #include <stdexcept>
+#include <iostream>
+#include "../../include/models/Player.hpp"
 
 StreetTile::StreetTile(int id, std::string code, std::string name,
                        std::string colorGroup, int landPrice,
@@ -169,4 +171,46 @@ int StreetTile::getHotelBuildCost() const {
 
 const std::vector<int>& StreetTile::getRentTable() const {
     return rentTable;
+}
+
+void StreetTile::cetakAkta() const {
+    std::cout << "+================================+" << std::endl;
+    std::cout << "|        AKTA KEPEMILIKAN        |" << std::endl;
+    std::string info = "[" + getColorGroup() + "] " + name + " (" + code + ")";
+    int left = (33 - info.length()) / 2;
+    int right = 33 - left;
+    std::cout << "|";
+    for (size_t i = 0; i < left; i++){std::cout << " ";}
+    std::cout << info;
+    for (size_t i = 0; i < right; i++){std::cout << " ";}
+    std::cout << std::endl;
+    std::cout << "+================================+" << std::endl;
+    printf("| Harga Beli        : M%3d       |\n", getLandPrice());
+    printf("| Harga Gadai       : M%3d       |\n", getMortgageValue());
+    printf("+--------------------------------+\n");
+    printf("| Sewa (unimproved) : M%3d        |\n", rentTable[0]);   
+    printf("| Sewa (1 rumah)    : M%3d       |\n", rentTable[1]);
+    printf("| Sewa (2 rumah)    : M%3d       |\n",rentTable[2]);
+    printf("| Sewa (3 rumah)    : M%3d       |\n",rentTable[3]);
+    printf("| Sewa (4 rumah)    : M%3d       |\n",rentTable[4]);
+    printf("| Sewa (hotel)      : M%3d       |\n",rentTable[5]);
+    printf("+================================+\n");
+    std::string statusString;
+    switch (status)
+    {
+    case PropertyStatus::MORTGAGED:
+        statusString = "MORTGAGED (" + this->getOwner()->getUsername() + ")";
+        break;
+    case PropertyStatus::BANK:
+        statusString = "BANK";
+        break;
+    case PropertyStatus::OWNED:
+        statusString = "OWNED (" + this->getOwner()->getUsername() + ")";
+        break;   
+    }
+    printf("| Status : ");
+    printf(statusString.c_str());
+    for (int i = 0; i < 20 - statusString.length(); i++) {printf(" ");}
+    printf(" |\n");
+    printf("+================================+\n");
 }

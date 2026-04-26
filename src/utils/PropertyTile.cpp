@@ -113,3 +113,38 @@ bool PropertyTile::canBeMortgaged(Game* game) const {
 }
 
 bool PropertyTile::isOwnable() const { return true; }
+
+void PropertyTile::cetakAkta() const {
+    std::cout << "+================================+" << std::endl;
+    std::cout << "|        AKTA KEPEMILIKAN        |" << std::endl;
+    std::string info = "[DEFAULT] " + name + " (" + code + ")";
+    int left = (33 - info.length()) / 2;
+    int right = 33 - left;
+    std::cout << "|";
+    for (size_t i = 0; i < left; i++){std::cout << " ";}
+    std::cout << info;
+    for (size_t i = 0; i < right; i++){std::cout << " ";}
+    std::cout << std::endl;
+    std::cout << "+================================+" << std::endl;
+    printf("| Harga Beli        : M%3d       |\n", getLandPrice());
+    printf("| Harga Gadai       : M%3d       |\n", getMortgageValue());
+    printf("+================================+\n");
+    std::string statusString;
+    switch (status)
+    {
+    case PropertyStatus::MORTGAGED:
+        statusString = "MORTGAGED (" + this->getOwner()->getUsername() + ")";
+        break;
+    case PropertyStatus::BANK:
+        statusString = "BANK";
+        break;
+    case PropertyStatus::OWNED:
+        statusString = "OWNED (" + this->getOwner()->getUsername() + ")";
+        break;   
+    }
+    printf("| Status : ");
+    printf(statusString.c_str());
+    for (int i = 0; i < 20 - statusString.length(); i++) {printf(" ");}
+    printf(" |\n");
+    printf("+================================+\n");
+}
