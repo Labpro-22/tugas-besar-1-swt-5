@@ -16,6 +16,7 @@ public:
     virtual void selectTile(int index) = 0;
     virtual void rollDice() = 0;
     virtual void advanceTurn() = 0;
+    virtual void buyCurrentProperty() = 0;
 
     virtual void openSelectedTileDetails() = 0;
     virtual void showCurrentPlayerProperties() = 0;

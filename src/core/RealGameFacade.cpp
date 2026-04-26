@@ -9,10 +9,15 @@
 #include "../../include/utils/RailroadTile.hpp"
 #include "../../include/utils/UtilityTile.hpp"
 #include "../../include/utils/LogEntry.hpp"
+#include "../../include/utils/BoardBuilder.hpp"
 
 #include <string>
 #include <vector>
 #include <sstream>
+#include <algorithm>
+#include <exception>
+#include <map>
+#include <stdexcept>
 
 RealGameFacade::RealGameFacade() {
     vm.statusLine = "Nimonspoli siap. Mulai permainan baru atau muat savefile.";
@@ -28,35 +33,71 @@ void RealGameFacade::tick(float) {
 }
 
 void RealGameFacade::startNewGame(const std::vector<std::string>& playerNames) {
-    // Buat game baru via GameManager
-    gameManager.startNewGame();
-    Game* game = gameManager.getCurrentGame();
-    if (!game) return;
+    try {
+        ConfigComposer composer(
+            "config/basic/property.txt",
+            "config/basic/railroad.txt",
+            "config/basic/utility.txt",
+            "config/basic/tax.txt",
+            "config/basic/aksi.txt",
+            "config/basic/special.txt",
+            "config/basic/misc.txt"
+        );
 
-    // Setup pemain
-    std::vector<Player>& players = game->getPlayers();
-    players.clear();
-    int startMoney = game->getConfig().getMiscConfig(SALDO_AWAL);
-    if (startMoney <= 0) startMoney = 1500;
-    int maxTurn = game->getConfig().getMiscConfig(MAX_TURN);
+        gameManager.startNewGame();
+        Game* game = gameManager.getCurrentGame();
+        if (!game) return;
+        game->setConfig(composer.getConfig());
 
-    // Buat TurnManager dengan order pemain
-    std::vector<int> order;
-    for (int i = 0; i < static_cast<int>(playerNames.size()); ++i) {
-        std::string name = playerNames[static_cast<size_t>(i)];
-        if (name.empty()) name = "Player " + std::to_string(i + 1);
-        // Buat Account temporary
-        Account acc(name, "pass", 0);
-        accountManager.addAccount(acc);
-        Account* accPtr = accountManager.getAccount(name, "pass");
-        players.emplace_back(i, accPtr, startMoney);
-        order.push_back(i);
+        BoardBuilder::build(
+            game->getBoard(),
+            composer.getConfig().getPropertyConfigAll(),
+            composer.getConfig().getActionTileConfigAll(),
+            [&]() {
+                std::map<int,int> m;
+                Config& c = composer.getConfig();
+                for (int i = 1; i <= 4; ++i) m[i] = c.getRailroadRent(i);
+                return m;
+            }(),
+            [&]() {
+                std::map<int,int> m;
+                Config& c = composer.getConfig();
+                for (int i = 1; i <= 2; ++i) m[i] = c.getUtilityMultiplier(i);
+                return m;
+            }()
+        );
+
+        if (game->getBoard().size() == 0) {
+            throw std::runtime_error("Board berhasil dibuat tetapi tidak memiliki petak.");
+        }
+
+        std::vector<Player>& players = game->getPlayers();
+        players.clear();
+        int startMoney = game->getConfig().getMiscConfig(SALDO_AWAL);
+        if (startMoney <= 0) startMoney = 1500;
+        int maxTurn = game->getConfig().getMiscConfig(MAX_TURN);
+
+        std::vector<int> order;
+        int count = std::max(2, std::min(4, static_cast<int>(playerNames.size())));
+        for (int i = 0; i < count; ++i) {
+            std::string name = playerNames[static_cast<size_t>(i)];
+            if (name.empty()) name = "Player " + std::to_string(i + 1);
+            Account acc(name, "pass", 0);
+            accountManager.addAccount(acc);
+            Account* accPtr = accountManager.getAccount(name, "pass");
+            players.emplace_back(i, accPtr, startMoney);
+            order.push_back(i);
+        }
+        game->getTurnManager() = TurnManager(order, maxTurn);
+
+        rebuildViewModel();
+        vm.statusLine = "Permainan dimulai! Board: " + std::to_string(game->getBoard().size()) + " petak.";
+        vm.footerHint = "Klik Roll Dice untuk melempar dadu.";
+    } catch (const std::exception& e) {
+        vm = GameViewModel{};
+        showOverlay(OverlayType::Info, "Gagal Membuat Game", {e.what()}, "Periksa file config/basic.");
+        vm.statusLine = std::string("Config gagal: ") + e.what();
     }
-    game->getTurnManager() = TurnManager(order, maxTurn);
-
-    rebuildViewModel();
-    vm.statusLine = "Permainan dimulai! Giliran: " + vm.players[0].name;
-    vm.footerHint = "Klik Roll Dice untuk melempar dadu.";
 }
 
 void RealGameFacade::loadDemoGame() {
@@ -81,9 +122,7 @@ void RealGameFacade::selectTile(int index) {
 void RealGameFacade::rollDice() {
     Game* game = gameManager.getCurrentGame();
     if (!game || game->isGameOver()) return;
-    // Eksekusi satu giliran roll via Game internal
-    // Memanggil satu langkah dari startTurn — kita modelling executeCommand
-    game->executeCommand("LEMPAR_DADU");
+    game->rollDiceForCurrentPlayer();
     rebuildViewModel();
 }
 
@@ -94,9 +133,20 @@ void RealGameFacade::advanceTurn() {
     rebuildViewModel();
 }
 
+void RealGameFacade::buyCurrentProperty() {
+    Game* game = gameManager.getCurrentGame();
+    if (!game || game->isGameOver()) return;
+    bool ok = game->buyCurrentProperty();
+    rebuildViewModel();
+    showOverlay(OverlayType::Info, ok ? "Pembelian Berhasil" : "Pembelian Gagal",
+                {ok ? "Properti berhasil dibeli." : "Tidak ada properti bank yang bisa dibeli atau uang tidak cukup."},
+                "");
+}
+
 void RealGameFacade::openSelectedTileDetails() {
     Game* game = gameManager.getCurrentGame();
     if (!game || vm.selectedTileIndex < 0) return;
+    if (game->getBoard().size() == 0 || vm.selectedTileIndex >= game->getBoard().size()) return;
     Tile* tile = game->getBoard().getTileByIndex(vm.selectedTileIndex);
     if (!tile) return;
 
@@ -248,12 +298,11 @@ TileKind RealGameFacade::tileKindFromCode(const std::string& code,
         return TileKind::Street;
     }
     if (colorGroup == "ABU_ABU") return TileKind::Utility;
-    // heuristic dari kode
-    if (code == "ST1" || code == "ST2" || code == "ST3" || code == "ST4") return TileKind::Railroad;
+    // heuristic dari kode action tile config
+    if (code == "GBR" || code == "STB" || code == "TUG" || code == "GUB") return TileKind::Railroad;
     if (code == "PLN" || code == "PAM") return TileKind::Utility;
-    if (code == "KES1" || code == "KES2") return TileKind::Card;
-    if (code == "DU1" || code == "DU2") return TileKind::Card;
-    if (code == "FEST1" || code == "FEST2") return TileKind::Festival;
+    if (code == "KSP" || code == "DNU") return TileKind::Card;
+    if (code == "FES") return TileKind::Festival;
     if (code == "PPH" || code == "PBM") return TileKind::Tax;
     return TileKind::Special;
 }

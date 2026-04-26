@@ -16,6 +16,7 @@ public:
     void selectTile(int index) override;
     void rollDice() override;
     void advanceTurn() override;
+    void buyCurrentProperty() override;
 
     void openSelectedTileDetails() override;
     void showCurrentPlayerProperties() override;

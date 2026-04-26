@@ -152,6 +152,25 @@ void MockGameFacade::advanceTurn() {
     addLog(vm.players[static_cast<std::size_t>(vm.currentPlayerIndex)].name, "TURN", "Turn moved to active player.");
 }
 
+void MockGameFacade::buyCurrentProperty() {
+    if (vm.players.empty() || vm.board.empty()) {
+        return;
+    }
+
+    PlayerViewData& player = vm.players[static_cast<std::size_t>(vm.currentPlayerIndex)];
+    TileViewData& tile = vm.board[static_cast<std::size_t>(player.position)];
+    if ((tile.kind == TileKind::Street || tile.kind == TileKind::Railroad || tile.kind == TileKind::Utility) &&
+        tile.ownerIndex < 0 && player.money >= tile.price) {
+        player.money -= tile.price;
+        tile.ownerIndex = vm.currentPlayerIndex;
+        tile.status = PropertyStatusView::Owned;
+        addLog(player.name, "BUY", "Bought " + tile.code + " for M" + std::to_string(tile.price) + ".");
+    } else {
+        addLog(player.name, "BUY_FAIL", "No available property to buy.");
+    }
+    normalizeCurrentPlayer();
+}
+
 void MockGameFacade::openSelectedTileDetails() {
     if (vm.board.empty()) {
         return;

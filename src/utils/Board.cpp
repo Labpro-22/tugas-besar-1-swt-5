@@ -18,11 +18,7 @@ void Board::addTile(Tile* tile) {
     }
 
     const std::string code = tile->getCode();
-    if (codeToIndex.count(code) != 0U) {
-        throw std::invalid_argument("Duplicate tile code: " + code);
-    }
-
-    codeToIndex[code] = static_cast<int>(tilesVector.size());
+    codeToIndices[code].push_back(static_cast<int>(tilesVector.size()));
     tilesVector.push_back(tile);
 }
 
@@ -41,12 +37,20 @@ Tile* Board::getTileByIndex(int index) const {
 }
 
 Tile* Board::getTileByCode(const std::string& code) const {
-    const auto it = codeToIndex.find(code);
-    if (it == codeToIndex.end()) {
+    const auto it = codeToIndices.find(code);
+    if (it == codeToIndices.end() || it->second.empty()) {
         throw std::out_of_range("Unknown tile code: " + code);
     }
 
-    return tilesVector[it->second];
+    return tilesVector[it->second.front()];
+}
+
+std::vector<int> Board::getTileIndicesByCode(const std::string& code) const {
+    const auto it = codeToIndices.find(code);
+    if (it == codeToIndices.end()) {
+        return {};
+    }
+    return it->second;
 }
 
 int Board::calculateNewPosition(int pos, int step, bool& passedGo) const {
@@ -61,7 +65,7 @@ int Board::calculateNewPosition(int pos, int step, bool& passedGo) const {
         newPos += boardSize;
     }
 
-    passedGo = (rawPosition >= boardSize);
+    passedGo = (step > 0 && rawPosition > boardSize);
     return newPos;
 }
 

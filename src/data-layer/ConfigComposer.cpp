@@ -11,6 +11,14 @@ Config ConfigComposer::buildConfig(const string &pathProp, const string &pathRai
     SpecialTileConfig specialHandler(pathSpecial);
     MiscTileConfig miscHandler(pathMisc);
 
+    propHandler.loadConfig();
+    railHandler.loadConfig();
+    utilHandler.loadConfig();
+    taxHandler.loadConfig();
+    actionHandler.loadConfig();
+    specialHandler.loadConfig();
+    miscHandler.loadConfig();
+
     Config config (
         propHandler.getData(),
         railHandler.getRailRoadRentTable(),

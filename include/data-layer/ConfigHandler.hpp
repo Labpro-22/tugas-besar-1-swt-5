@@ -55,7 +55,7 @@ public:
 class TaxConfig : public ConfigHandler
 {
 private:
-  tuple <int,int,int> taxConfig;
+  tuple <int,int,int> taxConfig = {0, 0, 0};
 public:
   TaxConfig(string path);
   void loadConfig();
@@ -75,7 +75,7 @@ public:
 class SpecialTileConfig : public ConfigHandler
 {
 private:
-  tuple<int,int> specialTileConfig;
+  tuple<int,int> specialTileConfig = {0, 0};
 public:
   SpecialTileConfig(string path);
   void loadConfig();
@@ -85,7 +85,7 @@ public:
 class MiscTileConfig : public ConfigHandler
 {
 private:
-  tuple<int,int> miscTileConfig;
+  tuple<int,int> miscTileConfig = {0, 0};
 public:
   MiscTileConfig(string path);
   void loadConfig();
