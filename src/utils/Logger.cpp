@@ -20,6 +20,33 @@ void Logger::printLog()
     }
 }
 
+
+void Logger::printLog(int count)
+{
+    if (count <= 0)
+    {
+        printLog();
+        return;
+    }
+
+    if (entries.empty())
+    {
+        cout << "No log entries." << endl;
+        return;
+    }
+
+    size_t start = 0;
+    if (entries.size() > static_cast<size_t>(count))
+    {
+        start = entries.size() - static_cast<size_t>(count);
+    }
+
+    for (size_t i = start; i < entries.size(); ++i)
+    {
+        cout << entries[i].toString() << endl;
+    }
+}
+
 vector<LogEntry> Logger::getEntries()
 {
     return entries;

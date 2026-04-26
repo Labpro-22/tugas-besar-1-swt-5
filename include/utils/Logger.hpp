@@ -12,6 +12,7 @@ private:
 public:
     void log(int turn, string username, string actionType, string detail);
     void printLog();
+    void printLog(int count);
     vector<LogEntry> getEntries();
     void clear();
     std::string serialize() const;

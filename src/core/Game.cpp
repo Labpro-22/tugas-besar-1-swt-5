@@ -75,15 +75,34 @@ void Game::startTurn() {
         }
     }
 
+    auto makePlayerMarkers = [&]() {
+        map<int, vector<string>> markers;
+        for (const Player& p : players) {
+            if (!p.isBankrupt()) {
+                markers[p.getPosition()].push_back("P" + to_string(p.getId() + 1));
+            }
+        }
+        return markers;
+    };
+
+    auto makeTurnInfo = [&]() {
+        string info = "TURN " + to_string(turnManager.getCurrentTurn())
+                    + " / " + to_string(turnManager.getMaxTurn())
+                    + " | Giliran: P" + to_string(current.getId() + 1)
+                    + " (" + current.getUsername() + ")"
+                    + " | Uang: M" + to_string(current.getMoney());
+        info += "\nPemain: ";
+        for (size_t i = 0; i < players.size(); ++i) {
+            if (i > 0) info += " | ";
+            info += "P" + to_string(players[i].getId() + 1) + "=" + players[i].getUsername();
+            if (players[i].getStatus() == PlayerStatus::JAILED) info += "(JAIL)";
+            if (players[i].getStatus() == PlayerStatus::BANKRUPT) info += "(BANGKRUT)";
+        }
+        return info;
+    };
+
     // Tampilkan papan
-    map<int, vector<string>> markers;
-    for (const Player& p : players) {
-        if (!p.isBankrupt()) markers[p.getPosition()].push_back(p.getUsername());
-    }
-    string turnInfo = "Turn " + to_string(turnManager.getCurrentTurn())
-                    + " | " + current.getUsername()
-                    + " | M" + to_string(current.getMoney());
-    board.printBoard(markers, turnInfo);
+    board.printBoard(makePlayerMarkers(), makeTurnInfo());
 
     // REPL
     bool turnEnded = false;
@@ -102,7 +121,7 @@ void Game::startTurn() {
         try {
 
             if (cmd == "CETAK_PAPAN") {
-                board.printBoard(markers, turnInfo);
+                board.printBoard(makePlayerMarkers(), makeTurnInfo());
 
             } else if (cmd == "CETAK_PROPERTI") {
                 string who;
