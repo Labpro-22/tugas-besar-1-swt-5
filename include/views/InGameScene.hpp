@@ -26,6 +26,7 @@ private:
     bool overlayOpen;
     std::string overlayTitle;
     std::vector<std::string> overlayLines;
+    std::string overlayFooter;
     float overlayVis;
 
     void layoutUi(Rectangle sr, Rectangle& br, Rectangle& sb);
@@ -38,7 +39,11 @@ private:
     void drawCenterPanel(const Rectangle& br);
     void drawSidebar(const Rectangle& sb);
     void drawOverlay(Rectangle sr);
-    void showOverlay(const std::string& title, const std::vector<std::string>& lines);
+    void showOverlay(
+        const std::string& title,
+        const std::vector<std::string>& lines,
+        const std::string& footer = ""
+    );
 };
 
 #endif

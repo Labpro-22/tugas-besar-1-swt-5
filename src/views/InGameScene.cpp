@@ -85,71 +85,375 @@ namespace {
 }
 
 InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
-    : Scene(sm,gm,am),
-      closeOverlayBtn("X",kDanger,{255,255,255,255}),
-      backToMenuBtn("Menu",kSubtext,{255,255,255,255}),
-      sceneTime(0), selectedTile(0), overlayOpen(false), overlayVis(0) {
+    : Scene(sm, gm, am),
+      closeOverlayBtn("X", kDanger, {255,255,255,255}),
+      backToMenuBtn("Menu", kSubtext, {255,255,255,255}),
+      sceneTime(0),
+      selectedTile(0),
+      overlayOpen(false),
+      overlayVis(0) {
 
-    struct Spec { const char* label; std::function<void()> fn; };
+    auto selectedPropertyCode = [this](Game* g, std::string& code) -> bool {
+        if (g == nullptr || g->getBoard().size() == 0) {
+            return false;
+        }
+
+        if (selectedTile < 0 || selectedTile >= g->getBoard().size()) {
+            return false;
+        }
+
+        Tile* tile = g->getBoard().getTileByIndex(selectedTile);
+        PropertyTile* property = dynamic_cast<PropertyTile*>(tile);
+
+        if (property == nullptr) {
+            return false;
+        }
+
+        code = property->getCode();
+        return true;
+    };
+
+    struct Spec {
+        const char* label;
+        std::function<void()> fn;
+    };
+
     std::vector<Spec> specs = {
-        {"Lempar Dadu",[this](){
-            Game* g = gameManager->getCurrentGame(); if(!g)return;
-            auto r = g->getDice().roll(); int d1=r.first,d2=r.second;
-            int idx = g->getTurnManager().getCurrentPlayerIndex();
-            Player& p = g->getPlayer(idx);
-            bool passGo = false;
-            if(g->getBoard().size()==0)return;
-            int np = g->getBoard().calculateNewPosition(p.getPosition(),d1+d2,passGo);
-            p.moveTo(np);
-            if(passGo){int sal=g->getConfig().getSpecialConfig(GO_SALARY);p.receive(sal);
-                g->getLogger().log(g->getTurnManager().getCurrentTurn(),p.getUsername(),"GO","M"+std::to_string(sal));}
-            g->handleLanding(p);
-            g->getLogger().log(g->getTurnManager().getCurrentTurn(),p.getUsername(),"DADU",
-                std::to_string(d1)+"+"+std::to_string(d2)+"="+std::to_string(d1+d2));
+        {"Lempar Dadu", [this]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr || g->isGameOver()) return;
+
+            auto result = g->rollDiceForCurrentPlayer();
+
+            if (result.first == 0 && result.second == 0) {
+                showOverlay("Dadu", {"Dadu tidak bisa dilempar saat ini."});
+                return;
+            }
+
+            showOverlay(
+                "Dadu",
+                {
+                    "Hasil: " + std::to_string(result.first) + " + " + std::to_string(result.second),
+                    "Total langkah: " + std::to_string(result.first + result.second)
+                }
+            );
         }},
-        {"Info Petak",[this](){
-            Game* g = gameManager->getCurrentGame(); if(!g)return;
+
+        {"Beli", [this]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr || g->isGameOver()) return;
+
+            bool ok = g->buyCurrentProperty();
+
+            showOverlay(
+                ok ? "Pembelian Berhasil" : "Pembelian Gagal",
+                {
+                    ok
+                        ? "Properti berhasil dibeli."
+                        : "Tidak ada properti bank yang bisa dibeli atau uang tidak cukup."
+                }
+            );
+        }},
+
+        {"Gadai", [this, selectedPropertyCode]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr || g->isGameOver()) return;
+
+            std::string code;
+            if (!selectedPropertyCode(g, code)) {
+                showOverlay("Gadai Gagal", {"Pilih petak properti terlebih dahulu."});
+                return;
+            }
+
+            bool ok = g->mortgageProperty(code);
+
+            showOverlay(
+                ok ? "Gadai Berhasil" : "Gadai Gagal",
+                {
+                    ok
+                        ? "Properti " + code + " berhasil digadaikan."
+                        : "Pilih properti milik pemain aktif yang belum digadaikan."
+                }
+            );
+        }},
+
+        {"Tebus", [this, selectedPropertyCode]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr || g->isGameOver()) return;
+
+            std::string code;
+            if (!selectedPropertyCode(g, code)) {
+                showOverlay("Tebus Gagal", {"Pilih petak properti terlebih dahulu."});
+                return;
+            }
+
+            bool ok = g->redeemProperty(code);
+
+            showOverlay(
+                ok ? "Tebus Berhasil" : "Tebus Gagal",
+                {
+                    ok
+                        ? "Properti " + code + " berhasil ditebus."
+                        : "Pilih properti tergadai milik pemain aktif dan pastikan uang cukup."
+                }
+            );
+        }},
+
+        {"Bangun", [this, selectedPropertyCode]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr || g->isGameOver()) return;
+
+            std::string code;
+            if (!selectedPropertyCode(g, code)) {
+                showOverlay("Bangun Gagal", {"Pilih petak street/property terlebih dahulu."});
+                return;
+            }
+
+            bool ok = g->buildProperty(code);
+
+            showOverlay(
+                ok ? "Bangun Berhasil" : "Bangun Gagal",
+                {
+                    ok
+                        ? "Bangunan di " + code + " berhasil ditingkatkan."
+                        : "Pilih street milik pemain aktif dan pastikan syarat bangun terpenuhi."
+                }
+            );
+        }},
+
+        {"Info Petak", [this]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr || g->getBoard().size() == 0) return;
+
             Tile* t = g->getBoard().getTileByIndex(selectedTile);
-            if(!t)return;
-            std::vector<std::string> lines = {"Kode: "+t->getCode(),"Nama: "+t->getName()};
+            if (t == nullptr) return;
+
+            std::vector<std::string> lines = {
+                "Kode: " + t->getCode(),
+                "Nama: " + t->getName()
+            };
+
             PropertyTile* pt = dynamic_cast<PropertyTile*>(t);
-            if(pt){lines.push_back("Harga: M"+std::to_string(pt->getLandPrice()));
-                lines.push_back("Pemilik: "+(pt->getOwner()?pt->getOwner()->getUsername():"BANK"));
-                StreetTile* st=dynamic_cast<StreetTile*>(pt);
-                if(st){lines.push_back("Grup: "+st->getColorGroup());
-                    lines.push_back("Rumah: "+std::to_string(st->getHouseCount())+(st->hasHotelBuilt()?" (Hotel)":""));}}
-            showOverlay(t->getName(),lines);
+            if (pt != nullptr) {
+                lines.push_back("Harga: M" + std::to_string(pt->getLandPrice()));
+                lines.push_back("Pemilik: " + std::string(pt->getOwner() ? pt->getOwner()->getUsername() : "BANK"));
+                lines.push_back("Status: " + std::string(
+                    pt->isMortgaged() ? "DIGADAIKAN" :
+                    pt->isOwned() ? "DIMILIKI" :
+                    "BANK"
+                ));
+
+                StreetTile* st = dynamic_cast<StreetTile*>(pt);
+                if (st != nullptr) {
+                    lines.push_back("Grup: " + st->getColorGroup());
+                    lines.push_back(
+                        "Rumah: " + std::to_string(st->getHouseCount()) +
+                        (st->hasHotelBuilt() ? " (Hotel)" : "")
+                    );
+
+                    if (pt->getFestivalMultiplier() > 1) {
+                        lines.push_back(
+                            "Festival x" + std::to_string(pt->getFestivalMultiplier()) +
+                            " (" + std::to_string(pt->getFestivalDuration()) + " giliran)"
+                        );
+                    }
+                }
+            }
+
+            showOverlay(t->getName(), lines, "Klik X untuk menutup.");
         }},
-        {"Properti",[this](){
-            Game* g = gameManager->getCurrentGame(); if(!g)return;
-            int idx=g->getTurnManager().getCurrentPlayerIndex();
+
+        {"Properti", [this]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr) return;
+
+            int idx = g->getTurnManager().getCurrentPlayerIndex();
+            if (idx < 0 || idx >= static_cast<int>(g->getPlayers().size())) return;
+
             Player& p = g->getPlayer(idx);
-            std::vector<std::string> lines = {"Pemilik: "+p.getUsername()};
-            for(PropertyTile* pt:p.getOwnedProperties()) lines.push_back(pt->getCode()+" - "+pt->getName()+(pt->isMortgaged()?" [GADAI]":""));
-            if(lines.size()==1) lines.push_back("(tidak ada)");
-            showOverlay("Properti "+p.getUsername(),lines);
+            std::vector<std::string> lines = {
+                "Pemilik: " + p.getUsername()
+            };
+
+            for (PropertyTile* pt : p.getOwnedProperties()) {
+                std::string row = pt->getCode() + " - " + pt->getName();
+                if (pt->isMortgaged()) row += " [GADAI]";
+                lines.push_back(row);
+            }
+
+            if (lines.size() == 1) {
+                lines.push_back("(tidak ada properti)");
+            }
+
+            showOverlay("Properti " + p.getUsername(), lines);
         }},
-        {"Kartu",[this](){
-            Game* g = gameManager->getCurrentGame(); if(!g)return;
-            int idx=g->getTurnManager().getCurrentPlayerIndex();
+
+        {"Kartu", [this]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr) return;
+
+            int idx = g->getTurnManager().getCurrentPlayerIndex();
+            if (idx < 0 || idx >= static_cast<int>(g->getPlayers().size())) return;
+
             Player& p = g->getPlayer(idx);
             std::vector<std::string> lines;
-            for(const auto& c:p.getHandCards()) lines.push_back(c->getName()+" - "+c->getDescription());
-            if(lines.empty()) lines.push_back("(tidak ada kartu)");
-            showOverlay("Kartu Kemampuan",lines);
+
+            for (const auto& c : p.getHandCards()) {
+                lines.push_back(c->getName() + " - " + c->getDescription());
+            }
+
+            if (lines.empty()) {
+                lines.push_back("(tidak ada kartu kemampuan)");
+            }
+
+            showOverlay(
+                "Kartu Kemampuan",
+                lines,
+                "Gunakan command/fitur kartu sesuai implementasi AbilityCard."
+            );
         }},
-        {"Akhir Giliran",[this](){
-            Game* g = gameManager->getCurrentGame(); if(!g)return;
+
+        {"Festival", [this]() {
+            showOverlay(
+                "Festival",
+                {
+                    "Mendaratlah di petak Festival untuk mengaktifkan.",
+                    "Sewa properti pilihan dapat berlipat selama beberapa giliran.",
+                    "Multiplier festival akan ditampilkan pada petak terkait."
+                }
+            );
+        }},
+
+        {"Pajak", [this]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr) return;
+
+            int pph = g->getConfig().getTaxConfig(PPH);
+            int pbm = g->getConfig().getTaxConfig(PBM);
+
+            showOverlay(
+                "Pajak",
+                {
+                    "PPH: M" + std::to_string(pph) + " flat atau berdasarkan aturan pajak.",
+                    "PBM: M" + std::to_string(pbm) + " flat.",
+                    "Pajak akan diproses ketika pemain mendarat di petak pajak."
+                }
+            );
+        }},
+
+        {"Lelang", [this]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr) return;
+
+            if (!g->getAuctionManager().isAuctionActive()) {
+                showOverlay(
+                    "Lelang",
+                    {
+                        "Tidak ada lelang aktif.",
+                        "Lelang biasanya dimulai ketika pemain menolak membeli properti bank."
+                    }
+                );
+                return;
+            }
+
+            Player* bidder = g->getAuctionManager().getCurrentTurnPlayer();
+
+            showOverlay(
+                "Lelang Aktif",
+                {
+                    "Giliran: " + std::string(bidder ? bidder->getUsername() : "?"),
+                    "Bid tertinggi: M" + std::to_string(g->getAuctionManager().getHighestBid()),
+                    "Gunakan fitur/command tawar sesuai AuctionManager."
+                }
+            );
+        }},
+
+        {"Simpan", [this]() {
+            showOverlay(
+                "Simpan / Muat",
+                {
+                    "Gunakan fitur save dari GameManager/GameStateSaver.",
+                    "Contoh file tujuan: data/save.txt",
+                    "Load game sebaiknya dilakukan sebelum permainan dimulai."
+                },
+                "Popup ini mengikuti functionality dari latest zip."
+            );
+        }},
+
+        {"Akhir Giliran", [this]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr || g->isGameOver()) return;
+
             g->endTurn();
+
+            showOverlay(
+                "Giliran Selesai",
+                {
+                    "Giliran berpindah ke pemain berikutnya."
+                }
+            );
+        }},
+
+        {"Kemenangan", [this]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr) return;
+
+            std::vector<Player*> sorted;
+            for (Player& p : g->getPlayers()) {
+                sorted.push_back(&p);
+            }
+
+            std::sort(sorted.begin(), sorted.end(), [](Player* a, Player* b) {
+                return a->getTotalWealth() > b->getTotalWealth();
+            });
+
+            std::vector<std::string> lines;
+            lines.push_back("=== Klasemen Sementara ===");
+
+            for (std::size_t i = 0; i < sorted.size(); ++i) {
+                lines.push_back(
+                    std::to_string(i + 1) + ". " +
+                    sorted[i]->getUsername() +
+                    " - M" + std::to_string(sorted[i]->getTotalWealth()) +
+                    (sorted[i]->isBankrupt() ? " [BANGKRUT]" : "")
+                );
+            }
+
+            showOverlay(
+                "Kemenangan",
+                lines,
+                "Pemenang final ditentukan berdasarkan kondisi gameOver / max turn."
+            );
         }},
     };
-    for(auto& s:specs){Button b(s.label,kAccentAlt,{255,255,255,255});b.setOnClick(s.fn);actionButtons.push_back(b);}
-    closeOverlayBtn.setOnClick([this](){overlayOpen=false;});
-    backToMenuBtn.setOnClick([this](){sceneManager->setScene(SceneType::MainMenu);});
+
+    for (auto& s : specs) {
+        Button b(s.label, kAccentAlt, {255,255,255,255});
+        b.setOnClick(s.fn);
+        actionButtons.push_back(b);
+    }
+
+    closeOverlayBtn.setOnClick([this]() {
+        overlayOpen = false;
+    });
+
+    backToMenuBtn.setOnClick([this]() {
+        sceneManager->setScene(SceneType::MainMenu);
+    });
 }
 
 void InGameScene::onEnter(){sceneTime=0;overlayVis=0;overlayOpen=false;tokenPos.clear();tokenPhase.clear();selectedTile=0;}
-void InGameScene::showOverlay(const std::string& t,const std::vector<std::string>& l){overlayTitle=t;overlayLines=l;overlayOpen=true;}
+
+void InGameScene::showOverlay(
+    const std::string& title,
+    const std::vector<std::string>& lines,
+    const std::string& footer
+) {
+    overlayTitle = title;
+    overlayLines = lines;
+    overlayFooter = footer;
+    overlayOpen = true;
+}
 
 void InGameScene::layoutUi(Rectangle sr,Rectangle& br,Rectangle& sb){
     float sm=20,tm=88,gap=16;
@@ -306,93 +610,156 @@ void InGameScene::drawBoard(const Rectangle& br){
     }
 }
 
-void InGameScene::drawSidebar(const Rectangle& sb){
-    Game* g = gameManager->getCurrentGame(); if(!g||g->getPlayers().empty())return;
+void InGameScene::drawSidebar(const Rectangle& sb) {
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr || g->getPlayers().empty()) return;
 
-    DrawRectangleRounded({sb.x+4,sb.y+7,sb.width,sb.height},.04f,10,Fade(kText,.07f));
-    DrawRectangleRounded(sb,.04f,10,Fade(kPanel,.97f));
-    DrawRectangleRoundedLinesEx(sb,.04f,10,2,Fade(kPanelBorder,.8f));
-    drawSmallFlower(sb.x+sb.width-22,sb.y+22,9,sceneTime*.4f,.35f);
+    DrawRectangleRounded({sb.x + 4, sb.y + 7, sb.width, sb.height}, .04f, 10, Fade(kText, .07f));
+    DrawRectangleRounded(sb, .04f, 10, Fade(kPanel, .97f));
+    DrawRectangleRoundedLinesEx(sb, .04f, 10, 2, Fade(kPanelBorder, .8f));
+    drawSmallFlower(sb.x + sb.width - 22, sb.y + 22, 9, sceneTime * .4f, .35f);
 
-    int ci=g->getTurnManager().getCurrentPlayerIndex();
-    if(ci<0||ci>=(int)g->getPlayers().size())return;
-    Player& cur=g->getPlayer(ci);
-    DrawText("Giliran Sekarang",int(sb.x+16),int(sb.y+16),24,kText);
-    DrawCircle(int(sb.x+28),int(sb.y+66),11,kTokens[ci%4]);
-    DrawText(cur.getUsername().c_str(),int(sb.x+50),int(sb.y+52),26,kText);
-    DrawText(("M"+std::to_string(cur.getMoney())).c_str(),int(sb.x+16),int(sb.y+88),22,kAccentAlt);
+    int ci = g->getTurnManager().getCurrentPlayerIndex();
+    if (ci < 0 || ci >= static_cast<int>(g->getPlayers().size())) return;
 
-    if(g->getBoard().size()>0 && cur.getPosition()<g->getBoard().size()){
-        Tile* posTile=g->getBoard().getTileByIndex(cur.getPosition());
-        if(posTile) DrawText((posTile->getCode()+" - "+posTile->getName()).c_str(),int(sb.x+16),int(sb.y+116),18,kSubtext);
+    Player& cur = g->getPlayer(ci);
+
+    DrawText("Giliran Sekarang", int(sb.x + 16), int(sb.y + 16), 24, kText);
+    DrawCircle(int(sb.x + 28), int(sb.y + 66), 11, kTokens[ci % 4]);
+    DrawText(cur.getUsername().c_str(), int(sb.x + 50), int(sb.y + 52), 26, kText);
+    DrawText(("M" + std::to_string(cur.getMoney())).c_str(), int(sb.x + 16), int(sb.y + 88), 22, kAccentAlt);
+
+    if (g->getBoard().size() > 0 && selectedTile >= 0 && selectedTile < g->getBoard().size()) {
+        Tile* selected = g->getBoard().getTileByIndex(selectedTile);
+
+        if (selected != nullptr) {
+            DrawText("Petak Dipilih", int(sb.x + 16), int(sb.y + 116), 18, kText);
+            DrawText(
+                (selected->getCode() + " - " + selected->getName()).c_str(),
+                int(sb.x + 16),
+                int(sb.y + 140),
+                17,
+                kSubtext
+            );
+
+            PropertyTile* pt = dynamic_cast<PropertyTile*>(selected);
+            if (pt != nullptr) {
+                std::string status =
+                    pt->isMortgaged() ? "GADAI" :
+                    pt->isOwned() ? "OWNED" :
+                    "BANK";
+
+                DrawText(
+                    ("Status: " + status).c_str(),
+                    int(sb.x + 16),
+                    int(sb.y + 162),
+                    16,
+                    kSubtext
+                );
+            }
+        }
     }
 
-    // Progress bar
-    Rectangle wave{sb.x+16,sb.y+150,sb.width-32,16};
-    DrawRectangleRounded(wave,.8f,10,Fade(kPanelBorder,.35f));
-    float prog = g->getTurnManager().getMaxTurn()>0?(float)g->getTurnManager().getCurrentTurn()/g->getTurnManager().getMaxTurn():.5f;
-    DrawRectangleRounded({wave.x,wave.y,wave.width*prog,wave.height},.8f,10,kAccent);
+    Rectangle wave{sb.x + 16, sb.y + 190, sb.width - 32, 16};
+    DrawRectangleRounded(wave, .8f, 10, Fade(kPanelBorder, .35f));
 
-    // Action buttons
-    for(Button& b:actionButtons) b.draw();
+    float prog = g->getTurnManager().getMaxTurn() > 0
+        ? static_cast<float>(g->getTurnManager().getCurrentTurn()) / g->getTurnManager().getMaxTurn()
+        : .5f;
 
-    // Selected tile
-    Tile* sel = (g->getBoard().size()>0 && selectedTile<g->getBoard().size()) ? g->getBoard().getTileByIndex(selectedTile) : nullptr;
-    if(sel){
-        Rectangle ins{sb.x,sb.y+404,sb.width,106};
-        DrawRectangleRounded({ins.x+8,ins.y,ins.width-16,ins.height},.14f,8,Fade(kAccent,.1f));
-        DrawText("Petak Dipilih",int(ins.x+16),int(ins.y+8),22,kText);
-        DrawText((sel->getCode()+" - "+sel->getName()).c_str(),int(ins.x+16),int(ins.y+38),20,kText);
+    DrawRectangleRounded({wave.x, wave.y, wave.width * prog, wave.height}, .8f, 10, kAccent);
+
+    for (Button& b : actionButtons) {
+        b.draw();
     }
 
-    // All players
-    DrawText("Semua Pemain",int(sb.x+16),int(sb.y+524),22,kText);
-    for(size_t i=0;i<g->getPlayers().size();++i){
-        float py=sb.y+556+i*28;
-        DrawCircle(int(sb.x+20),int(py+8),6,kTokens[i%4]);
-        Player& p=g->getPlayers()[i];
-        std::string row=p.getUsername()+" M"+std::to_string(p.getMoney());
-        if(p.isBankrupt()) row+=" [BANGKRUT]";
-        else if(p.getStatus()==PlayerStatus::JAILED) row+=" [PENJARA]";
-        DrawText(row.c_str(),int(sb.x+36),int(py),17,int(i)==ci?kText:kSubtext);
+    DrawText("Semua Pemain", int(sb.x + 16), int(sb.y + 640), 22, kText);
+
+    for (size_t i = 0; i < g->getPlayers().size(); ++i) {
+        float py = sb.y + 672 + i * 28;
+        DrawCircle(int(sb.x + 20), int(py + 8), 6, kTokens[i % 4]);
+
+        Player& p = g->getPlayers()[i];
+
+        std::string row = p.getUsername() + " M" + std::to_string(p.getMoney());
+
+        if (p.isBankrupt()) {
+            row += " [BANGKRUT]";
+        } else if (p.getStatus() == PlayerStatus::JAILED) {
+            row += " [PENJARA]";
+        }
+
+        DrawText(row.c_str(), int(sb.x + 36), int(py), 17, int(i) == ci ? kText : kSubtext);
     }
 
-    // Hand cards
-    DrawText("Kartu Kemampuan",int(sb.x+16),int(sb.y+684),22,kText);
-    const auto& hand=cur.getHandCards();
-    for(size_t i=0;i<hand.size();++i){
-        float sway=sinf(sceneTime*1.7f+i)*3;
-        Rectangle card{sb.x+16+i*100,sb.y+716+sway,88,38};
-        DrawRectangleRounded(card,.22f,8,Fade(kAccent,.25f));
-        DrawRectangleRoundedLinesEx(card,.22f,8,1.5f,Fade(kPanelBorder,.7f));
-        DrawText(hand[i]->getName().c_str(),int(card.x+7),int(card.y+10),14,kText);
-    }
+    DrawText("Log Terbaru", int(sb.x + 16), int(sb.y + 790), 22, kText);
 
-    // Log
-    DrawText("Log Terbaru",int(sb.x+16),int(sb.y+776),22,kText);
-    auto entries=g->getLogger().getEntries();
-    int lc=std::min<int>(3,int(entries.size()));
-    for(int i=0;i<lc;++i){
-        const LogEntry& e=entries[size_t(i)];
-        float ly=sb.y+808+i*40;
-        DrawText(("[T"+std::to_string(e.getTurn())+"] "+e.getUsername()+" | "+e.getActionType()).c_str(),int(sb.x+16),int(ly),16,kText);
-        DrawText(e.getDetail().c_str(),int(sb.x+16),int(ly+17),15,kSubtext);
+    auto entries = g->getLogger().getEntries();
+    int logCount = std::min<int>(4, static_cast<int>(entries.size()));
+
+    for (int i = 0; i < logCount; ++i) {
+        const LogEntry& e = entries[entries.size() - 1 - static_cast<size_t>(i)];
+        float ly = sb.y + 822 + i * 40;
+
+        DrawText(
+            ("[T" + std::to_string(e.getTurn()) + "] " + e.getUsername() + " | " + e.getActionType()).c_str(),
+            int(sb.x + 16),
+            int(ly),
+            16,
+            kText
+        );
+
+        DrawText(
+            e.getDetail().c_str(),
+            int(sb.x + 16),
+            int(ly + 17),
+            15,
+            kSubtext
+        );
     }
 }
 
-void InGameScene::drawOverlay(Rectangle sr){
-    if(overlayVis<=.01f||!overlayOpen)return;
-    DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Fade(kText,.38f*overlayVis));
-    float rise=(1-overlayVis)*24;
-    Rectangle p{sr.width*.5f-310,sr.height*.5f-252+rise,620,504};
-    DrawRectangleRounded({p.x+5,p.y+9,p.width,p.height},.09f,10,Fade(kText,.12f*overlayVis));
-    DrawRectangleRounded(p,.09f,10,Fade({250,255,235,255},overlayVis));
-    DrawRectangleRoundedLinesEx(p,.09f,10,2.5f,Fade(kPanelBorder,overlayVis));
-    drawSmallFlower(p.x+p.width-28,p.y+28,14,sceneTime*.5f,.5f*overlayVis);
-    DrawText(overlayTitle.c_str(),int(p.x+22),int(p.y+20),32,kText);
+void InGameScene::drawOverlay(Rectangle sr) {
+    if (overlayVis <= .01f || !overlayOpen) return;
+
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(kText, .38f * overlayVis));
+
+    float rise = (1 - overlayVis) * 24;
+    Rectangle p{
+        sr.width * .5f - 310,
+        sr.height * .5f - 252 + rise,
+        620,
+        504
+    };
+
+    DrawRectangleRounded({p.x + 5, p.y + 9, p.width, p.height}, .09f, 10, Fade(kText, .12f * overlayVis));
+    DrawRectangleRounded(p, .09f, 10, Fade({250,255,235,255}, overlayVis));
+    DrawRectangleRoundedLinesEx(p, .09f, 10, 2.5f, Fade(kPanelBorder, overlayVis));
+
+    drawSmallFlower(p.x + p.width - 28, p.y + 28, 14, sceneTime * .5f, .5f * overlayVis);
+
+    DrawText(overlayTitle.c_str(), int(p.x + 22), int(p.y + 20), 32, kText);
+
     closeOverlayBtn.draw();
-    float y=p.y+80;
-    for(const auto& l:overlayLines){DrawText(l.c_str(),int(p.x+24),int(y),20,kSubtext);y+=32;if(y>p.y+p.height-40)break;}
+
+    float y = p.y + 80;
+
+    for (const auto& line : overlayLines) {
+        DrawText(line.c_str(), int(p.x + 24), int(y), 20, kSubtext);
+        y += 32;
+
+        if (y > p.y + p.height - 70) break;
+    }
+
+    if (!overlayFooter.empty()) {
+        DrawText(
+            overlayFooter.c_str(),
+            int(p.x + 24),
+            int(p.y + p.height - 42),
+            18,
+            kSubtext
+        );
+    }
 }
 
 void InGameScene::draw(){
