@@ -410,13 +410,6 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             if (g == nullptr || g->isGameOver()) return;
 
             g->endTurn();
-
-            showOverlay(
-                "Giliran Selesai",
-                {
-                    "Giliran berpindah ke pemain berikutnya."
-                }
-            );
         }},
 
         {"Kemenangan", [this]() {
