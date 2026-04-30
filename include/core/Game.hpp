@@ -33,6 +33,7 @@ private:
     Config config;
     bool gameOver;
     int lastDiceTotal;
+    bool diceRolledThisTurn;
     
 public:
     // Constructor
@@ -61,6 +62,8 @@ public:
     void declareBankruptToPlayer(Player& player, Player& creditor);
     void setLastDiceTotal(int total);
     int getLastDiceTotal() const;
+    bool hasRolledDiceThisTurn() const;
+    void setDiceRolledThisTurn(bool status);
 
     // Getters / Setters    
     Board& getBoard();

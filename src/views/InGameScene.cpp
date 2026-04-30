@@ -149,7 +149,11 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             auto result = g->rollDiceForCurrentPlayer();
 
             if (result.first == 0 && result.second == 0) {
-                showOverlay("Dadu", {"Dadu tidak bisa dilempar saat ini."});
+                if (g->hasRolledDiceThisTurn()) {
+                    showOverlay("Dadu", {"Kamu sudah melempar dadu di giliran ini."});
+                } else {
+                    showOverlay("Dadu", {"Dadu tidak bisa dilempar saat ini."});
+                }
                 return;
             }
 

@@ -703,10 +703,16 @@ void GameStateLoader::applyGameOver(Game& game, const std::vector<std::string>& 
         std::string key;
         std::string value;
 
-        if (parseKeyValue(line, key, value) && key == "GAME_OVER")
+        if (parseKeyValue(line, key, value))
         {
-            game.setGameOver(parseBool(value));
-            return;
+            if (key == "GAME_OVER")
+            {
+                game.setGameOver(parseBool(value));
+            }
+            else if (key == "DICE_ROLLED_THIS_TURN")
+            {
+                game.setDiceRolledThisTurn(parseBool(value));
+            }
         }
     }
 }

@@ -274,6 +274,9 @@ bool GameStateSaver::save(Game& game, const std::string& filePath)
 
     writeRaw(out, "=== GAME STATE SAVE ===");
     writeBool(out, "GAME_OVER", game.isGameOver());
+    writeRaw(out, "=== GAME STATE SAVE ===");
+writeBool(out, "GAME_OVER", game.isGameOver());
+writeBool(out, "DICE_ROLLED_THIS_TURN", game.hasRolledDiceThisTurn());
 
     saveTurnManager(out, game);
     savePlayers(out, game);
