@@ -345,10 +345,12 @@ void GameStateSaver::saveTradeManager(std::ofstream& out, Game& game)
 
         for (std::size_t j = 0; j < offeredProperties.size(); ++j)
         {
+            PropertyTile* property = offeredProperties[j];
+
             writeString(
                 out,
                 "OFFERED_PROPERTY_" + std::to_string(j),
-                offeredProperties[j] == nullptr ? "NONE" : offeredProperties[j]->getCode()
+                property == nullptr ? "NONE" : property->getCode()
             );
         }
 
@@ -357,10 +359,12 @@ void GameStateSaver::saveTradeManager(std::ofstream& out, Game& game)
 
         for (std::size_t j = 0; j < requestedProperties.size(); ++j)
         {
+            PropertyTile* property = requestedProperties[j];
+
             writeString(
                 out,
                 "REQUESTED_PROPERTY_" + std::to_string(j),
-                requestedProperties[j] == nullptr ? "NONE" : requestedProperties[j]->getCode()
+                property == nullptr ? "NONE" : property->getCode()
             );
         }
 

@@ -148,13 +148,6 @@ void GameManager::saveGame(const string& fileName) const
         throw FileIOException("Gagal menyimpan game: tidak ada game aktif.");
     }
 
-    currentGame->getLogger().log(
-        currentGame->getTurnManager().getCurrentTurn(),
-        "System",
-        "SAVE",
-        "Game disimpan ke " + fileName
-    );
-
     const bool success = GameStateSaver::save(*currentGame, fileName);
 
     if (!success)
@@ -163,6 +156,13 @@ void GameManager::saveGame(const string& fileName) const
             "Gagal menyimpan game: file tidak dapat ditulis: " + fileName
         );
     }
+
+    currentGame->getLogger().log(
+        currentGame->getTurnManager().getCurrentTurn(),
+        "System",
+        "SAVE",
+        "Game disimpan ke " + fileName
+    );
 }
 
 void GameManager::quitCurrentGame()

@@ -20,6 +20,8 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <cctype>
+#include <exception>
 
 enum class PropertyStatusView {
     Bank,
@@ -82,16 +84,37 @@ namespace {
         }
         DrawCircle(static_cast<int>(cx), static_cast<int>(cy), r * 0.6f, Fade({255,160,30,255}, alpha));
     }
+
+    std::string trimCopy(const std::string& value) {
+        std::size_t first = 0;
+
+        while (first < value.size() && std::isspace(static_cast<unsigned char>(value[first]))) {
+            ++first;
+        }
+
+        std::size_t last = value.size();
+
+        while (last > first && std::isspace(static_cast<unsigned char>(value[last - 1]))) {
+            --last;
+        }
+
+        return value.substr(first, last - first);
+    }
 }
 
 InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
     : Scene(sm, gm, am),
       closeOverlayBtn("X", kDanger, {255,255,255,255}),
       backToMenuBtn("Menu", kSubtext, {255,255,255,255}),
+      saveConfirmButton("Simpan", kAccent, kText),
+      saveCancelButton("Batal", kPanelBorder, kText),
+      savePathField("data/save.txt"),
       sceneTime(0),
       selectedTile(0),
       overlayOpen(false),
-      overlayVis(0) {
+      overlayVis(0),
+      showSaveModal(false),
+      saveModalVis(0) {
 
     auto selectedPropertyCode = [this](Game* g, std::string& code) -> bool {
         if (g == nullptr || g->getBoard().size() == 0) {
@@ -369,15 +392,13 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
         }},
 
         {"Simpan", [this]() {
-            showOverlay(
-                "Simpan / Muat",
-                {
-                    "Gunakan fitur save dari GameManager/GameStateSaver.",
-                    "Contoh file tujuan: data/save.txt",
-                    "Load game sebaiknya dilakukan sebelum permainan dimulai."
-                },
-                "Popup ini mengikuti functionality dari latest zip."
-            );
+            showSaveModal = true;
+            overlayOpen = false;
+            saveError.clear();
+
+            if (savePathField.getContent().empty()) {
+                savePathField.setContent("data/save.txt");
+            }
         }},
 
         {"Akhir Giliran", [this]() {
@@ -437,12 +458,64 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
         overlayOpen = false;
     });
 
+    saveConfirmButton.setOnClick([this]() {
+        onSaveGame();
+    });
+
+    saveCancelButton.setOnClick([this]() {
+        showSaveModal = false;
+        saveError.clear();
+    });
+
+    savePathField.setMaxLength(160);
+    savePathField.setContent("data/save.txt");
+
     backToMenuBtn.setOnClick([this]() {
         sceneManager->setScene(SceneType::MainMenu);
     });
 }
 
-void InGameScene::onEnter(){sceneTime=0;overlayVis=0;overlayOpen=false;tokenPos.clear();tokenPhase.clear();selectedTile=0;}
+void InGameScene::onEnter() {
+    sceneTime = 0;
+    overlayVis = 0;
+    overlayOpen = false;
+
+    showSaveModal = false;
+    saveModalVis = 0;
+    saveError.clear();
+
+    tokenPos.clear();
+    tokenPhase.clear();
+    selectedTile = 0;
+}
+
+void InGameScene::onSaveGame() {
+    const std::string filePath = trimCopy(savePathField.getContent());
+
+    if (filePath.empty()) {
+        saveError = "Path save file tidak boleh kosong.";
+        showSaveModal = true;
+        return;
+    }
+
+    try {
+        gameManager->saveGame(filePath);
+
+        showSaveModal = false;
+        saveError.clear();
+
+        showOverlay(
+            "Save Berhasil",
+            {
+                "Game berhasil disimpan.",
+                "File: " + filePath
+            }
+        );
+    } catch (const std::exception& e) {
+        saveError = std::string("Gagal save game: ") + e.what();
+        showSaveModal = true;
+    }
+}
 
 void InGameScene::showOverlay(
     const std::string& title,
@@ -482,6 +555,7 @@ void InGameScene::updateAnimations(const Rectangle& br){
         tokenPos[i].x=ease(tokenPos[i].x,tgt.x,dt*6);tokenPos[i].y=ease(tokenPos[i].y,tgt.y,dt*6);
         tokenPhase[i]+=dt*(1.1f+i*.12f);}
     overlayVis=ease(overlayVis,overlayOpen?1.f:0.f,dt*8);
+    saveModalVis = ease(saveModalVis, showSaveModal ? 1.f : 0.f, dt * 8);
 }
 
 void InGameScene::update(){
@@ -493,15 +567,102 @@ void InGameScene::update(){
     int tileCount = g ? g->getBoard().size() : 0;
     for(int i=0;i<tileCount;++i) tileRects.push_back(getTileRect(br,i));
     updateAnimations(br);
-    if(IsKeyPressed(KEY_ESCAPE)){if(overlayOpen)overlayOpen=false;else{sceneManager->setScene(SceneType::MainMenu);return;}}
-    if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON)){Vector2 m=GetMousePosition();
-        for(size_t i=0;i<tileRects.size();++i) if(CheckCollisionPointRec(m,tileRects[i])){selectedTile=int(i);break;}}
-    backToMenuBtn.setBoundary({sr.width-130,22,106,42});backToMenuBtn.update();
-    float bw=(sb.width-14)*.5f,bh=44,sy=sb.y+238;
-    for(size_t i=0;i<actionButtons.size();++i){
-        int r=int(i)/2,c=int(i)%2;
-        actionButtons[i].setBoundary({sb.x+c*(bw+14),sy+r*54,bw,bh});actionButtons[i].update();}
-    if(overlayVis>.01f){closeOverlayBtn.setBoundary({sr.width*.5f+268,sr.height*.5f-240,50,38});closeOverlayBtn.update();}
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        if (showSaveModal) {
+            showSaveModal = false;
+            saveError.clear();
+            return;
+        }
+
+        if (overlayOpen) {
+            overlayOpen = false;
+        } else {
+            sceneManager->setScene(SceneType::MainMenu);
+            return;
+        }
+    }
+
+    if (saveModalVis < .02f && overlayVis < .02f && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+        Vector2 m = GetMousePosition();
+
+        for (size_t i = 0; i < tileRects.size(); ++i) {
+            if (CheckCollisionPointRec(m, tileRects[i])) {
+                selectedTile = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+
+    backToMenuBtn.setBoundary({sr.width - 130, 22, 106, 42});
+
+    if (saveModalVis < .02f && overlayVis < .02f) {
+        backToMenuBtn.update();
+    }
+
+    float bw = (sb.width - 14) * .5f;
+    float bh = 44;
+    float sy = sb.y + 238;
+
+    for (size_t i = 0; i < actionButtons.size(); ++i) {
+        int r = static_cast<int>(i) / 2;
+        int c = static_cast<int>(i) % 2;
+
+        actionButtons[i].setBoundary({
+            sb.x + c * (bw + 14),
+            sy + r * 54,
+            bw,
+            bh
+        });
+
+        if (saveModalVis < .02f && overlayVis < .02f) {
+            actionButtons[i].update();
+        }
+    }
+
+    if (overlayVis > .01f) {
+        closeOverlayBtn.setBoundary({
+            sr.width * .5f + 268,
+            sr.height * .5f - 240,
+            50,
+            38
+        });
+
+        closeOverlayBtn.update();
+    }
+
+    if (saveModalVis > .01f) {
+        Rectangle p{
+            sr.width * .5f - 300,
+            sr.height * .5f - 170 + (1 - saveModalVis) * 24,
+            600,
+            340
+        };
+
+        savePathField.setBoundary({
+            p.x + 24,
+            p.y + 122,
+            p.width - 48,
+            44
+        });
+
+        saveConfirmButton.setBoundary({
+            p.x + p.width - 220,
+            p.y + p.height - 70,
+            156,
+            50
+        });
+
+        saveCancelButton.setBoundary({
+            p.x + p.width - 390,
+            p.y + p.height - 70,
+            140,
+            50
+        });
+
+        savePathField.update();
+        saveConfirmButton.update();
+        saveCancelButton.update();
+    }
 }
 
 void InGameScene::drawBackground(Rectangle sr){
@@ -762,8 +923,116 @@ void InGameScene::drawOverlay(Rectangle sr) {
     }
 }
 
-void InGameScene::draw(){
-    Rectangle sr{0,0,(float)GetScreenWidth(),(float)GetScreenHeight()},br{},sb{};
-    layoutUi(sr,br,sb);
-    drawBackground(sr); drawHeader(sr); drawBoard(br); drawSidebar(sb); drawOverlay(sr);
+void InGameScene::drawSaveModal(Rectangle sr) {
+    if (saveModalVis <= .01f || !showSaveModal) return;
+
+    DrawRectangle(
+        0,
+        0,
+        GetScreenWidth(),
+        GetScreenHeight(),
+        Fade(kText, .38f * saveModalVis)
+    );
+
+    Rectangle p{
+        sr.width * .5f - 300,
+        sr.height * .5f - 170 + (1 - saveModalVis) * 24,
+        600,
+        340
+    };
+
+    DrawRectangleRounded(
+        {p.x + 5, p.y + 9, p.width, p.height},
+        .09f,
+        10,
+        Fade(kText, .12f * saveModalVis)
+    );
+
+    DrawRectangleRounded(
+        p,
+        .09f,
+        10,
+        Fade({250,255,235,255}, saveModalVis)
+    );
+
+    DrawRectangleRoundedLinesEx(
+        p,
+        .09f,
+        10,
+        2.5f,
+        Fade(kPanelBorder, saveModalVis)
+    );
+
+    DrawText(
+        "Simpan Game",
+        static_cast<int>(p.x + 24),
+        static_cast<int>(p.y + 24),
+        32,
+        kText
+    );
+
+    DrawText(
+        "Path Save File:",
+        static_cast<int>(p.x + 24),
+        static_cast<int>(p.y + 92),
+        20,
+        kText
+    );
+
+    savePathField.setBoundary({
+        p.x + 24,
+        p.y + 122,
+        p.width - 48,
+        44
+    });
+
+    savePathField.draw();
+
+    if (!saveError.empty()) {
+        DrawText(
+            saveError.c_str(),
+            static_cast<int>(p.x + 24),
+            static_cast<int>(p.y + 184),
+            18,
+            kDanger
+        );
+    }
+
+    saveConfirmButton.setBoundary({
+        p.x + p.width - 220,
+        p.y + p.height - 70,
+        156,
+        50
+    });
+
+    saveCancelButton.setBoundary({
+        p.x + p.width - 390,
+        p.y + p.height - 70,
+        140,
+        50
+    });
+
+    saveConfirmButton.draw();
+    saveCancelButton.draw();
+}
+
+void InGameScene::draw() {
+    Rectangle sr{
+        0,
+        0,
+        static_cast<float>(GetScreenWidth()),
+        static_cast<float>(GetScreenHeight())
+    };
+
+    Rectangle br{};
+    Rectangle sb{};
+
+    layoutUi(sr, br, sb);
+
+    drawBackground(sr);
+    drawHeader(sr);
+    drawBoard(br);
+    drawSidebar(sb);
+    drawOverlay(sr);
+    drawSaveModal(sr);
 }

@@ -81,51 +81,89 @@ std::string fitText(std::string value, int fontSize, int maxWidth) {
 MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* am)
     : Scene(sm, gm, am),
       configPathField("config/basic"),
+      loadPathField("data/save.txt"),
       newGameButton("New Game", kAccent, kText),
+      loadGameButton("Load Game", kAccentAlt, {255,255,255,255}),
       quitButton("Keluar", kDanger, {255,255,255,255}),
       startGameButton("Mulai!", kAccent, kText),
       cancelButton("Batal", kMuted, kText),
       plusButton("+", kAccentAlt, {255,255,255,255}),
       minusButton("-", kAccentAlt, {255,255,255,255}),
+      confirmLoadButton("Muat", kAccent, kText),
+      cancelLoadButton("Batal", kMuted, kText),
       showNewGameModal(false),
+      showLoadGameModal(false),
       playerCount(4),
       sceneTime(0.0f),
-      modalVisibility(0.0f) {
+      modalVisibility(0.0f),
+      loadModalVisibility(0.0f) {
 
     playerFields.emplace_back("Nama Pemain 1");
     playerFields.emplace_back("Nama Pemain 2");
     playerFields.emplace_back("Nama Pemain 3");
     playerFields.emplace_back("Nama Pemain 4");
+
     for (TextField& field : playerFields) {
         field.setMaxLength(8);
     }
+
     configPathField.setContent("config/basic");
     configPathField.setMaxLength(120);
 
+    loadPathField.setContent("data/save.txt");
+    loadPathField.setMaxLength(160);
+
     newGameButton.setOnClick([this]() {
         showNewGameModal = true;
+        showLoadGameModal = false;
         formError.clear();
+
         if (trimCopy(configPathField.getContent()).empty()) {
             configPathField.setContent("config/basic");
         }
     });
-    
-    quitButton.setOnClick([]() { CloseWindow(); });
+
+    loadGameButton.setOnClick([this]() {
+        showLoadGameModal = true;
+        showNewGameModal = false;
+        loadError.clear();
+
+        if (trimCopy(loadPathField.getContent()).empty()) {
+            loadPathField.setContent("data/save.txt");
+        }
+    });
+
+    quitButton.setOnClick([]() {
+        CloseWindow();
+    });
+
     cancelButton.setOnClick([this]() {
         showNewGameModal = false;
         formError.clear();
     });
+
+    cancelLoadButton.setOnClick([this]() {
+        showLoadGameModal = false;
+        loadError.clear();
+    });
+
+    confirmLoadButton.setOnClick([this]() {
+        onLoadGame();
+    });
+
     plusButton.setOnClick([this]() {
         playerCount = std::min(4, playerCount + 1);
         formError.clear();
     });
+
     minusButton.setOnClick([this]() {
         playerCount = std::max(2, playerCount - 1);
         formError.clear();
     });
+
     startGameButton.setOnClick([this]() {
         onStartGame();
-    }); 
+    });
 }
 
 void MainMenuScene::onStartGame() {
@@ -210,11 +248,36 @@ void MainMenuScene::onStartGame() {
     }
 }
 
+void MainMenuScene::onLoadGame() {
+    const std::string filePath = trimCopy(loadPathField.getContent());
+
+    if (filePath.empty()) {
+        loadError = "Path save file tidak boleh kosong.";
+        showLoadGameModal = true;
+        return;
+    }
+
+    try {
+        gameManager->loadGame(filePath);
+
+        showLoadGameModal = false;
+        loadError.clear();
+
+        sceneManager->setScene(SceneType::InGame);
+    } catch (const std::exception& e) {
+        loadError = std::string("Gagal load game: ") + e.what();
+        showLoadGameModal = true;
+    }
+}
+
 void MainMenuScene::onEnter() {
     sceneTime = 0.0f;
     showNewGameModal = false;
+    showLoadGameModal = false;
     modalVisibility = 0.0f;
+    loadModalVisibility = 0.0f;
     formError.clear();
+    loadError.clear();
 }
 
 void MainMenuScene::layoutButtons(Rectangle screenRect) {
@@ -223,35 +286,75 @@ void MainMenuScene::layoutButtons(Rectangle screenRect) {
     const float y = screenRect.y + screenRect.height - 130.0f;
     const float left = screenRect.x + 72.0f;
     const float gap = 16.0f;
+
     newGameButton.setBoundary({left, y, w, h});
+    loadGameButton.setBoundary({left + (w + gap), y, w, h});
     quitButton.setBoundary({left + (w + gap) * 2.0f, y, 130.0f, h});
 }
 
-void MainMenuScene::update() {
+void MainMenuScene::update() {  
     sceneTime += GetFrameTime();
-    Rectangle screen{0, 0, static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())};
+
+    Rectangle screen{
+        0,
+        0,
+        static_cast<float>(GetScreenWidth()),
+        static_cast<float>(GetScreenHeight())
+    };
+
     layoutButtons(screen);
 
-    modalVisibility = easeTowards(modalVisibility, showNewGameModal ? 1.0f : 0.0f, GetFrameTime() * 9.0f);
-    if (IsKeyPressed(KEY_ESCAPE) && showNewGameModal) {
-        showNewGameModal = false;
-        formError.clear();
+    modalVisibility = easeTowards(
+        modalVisibility,
+        showNewGameModal ? 1.0f : 0.0f,
+        GetFrameTime() * 9.0f
+    );
+
+    loadModalVisibility = easeTowards(
+        loadModalVisibility,
+        showLoadGameModal ? 1.0f : 0.0f,
+        GetFrameTime() * 9.0f
+    );
+
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        if (showNewGameModal) {
+            showNewGameModal = false;
+            formError.clear();
+            return;
+        }
+
+        if (showLoadGameModal) {
+            showLoadGameModal = false;
+            loadError.clear();
+            return;
+        }
     }
 
-    if (modalVisibility < 0.02f) {
+    if (modalVisibility < 0.02f && loadModalVisibility < 0.02f) {
         newGameButton.update();
+        loadGameButton.update();
         quitButton.update();
         return;
     }
 
-    plusButton.update();
-    minusButton.update();
-    startGameButton.update();
-    cancelButton.update();
-    for (int i = 0; i < playerCount; ++i) {
-        playerFields[static_cast<std::size_t>(i)].update();
+    if (modalVisibility >= 0.02f) {
+        plusButton.update();
+        minusButton.update();
+        startGameButton.update();
+        cancelButton.update();
+
+        for (int i = 0; i < playerCount; ++i) {
+            playerFields[static_cast<std::size_t>(i)].update();
+        }
+
+        configPathField.update();
     }
-    configPathField.update();
+
+    if (loadModalVisibility >= 0.02f) {
+        loadPathField.update();
+        confirmLoadButton.update();
+        cancelLoadButton.update();
+    }
 }
 
 void MainMenuScene::drawBackground(Rectangle screenRect) {
@@ -344,6 +447,105 @@ void MainMenuScene::drawSetupModal(Rectangle sr) {
     cancelButton.draw();
 }
 
+void MainMenuScene::drawLoadModal(Rectangle sr) {
+    if (loadModalVisibility <= 0.01f) return;
+
+    DrawRectangle(
+        0,
+        0,
+        GetScreenWidth(),
+        GetScreenHeight(),
+        Fade(kText, 0.35f * loadModalVisibility)
+    );
+
+    Rectangle modal{
+        sr.width * 0.5f - 300.0f,
+        sr.height * 0.5f - 170.0f + (1.0f - loadModalVisibility) * 28.0f,
+        600.0f,
+        340.0f
+    };
+
+    DrawRectangleRounded(
+        {modal.x + 6, modal.y + 10, modal.width, modal.height},
+        0.1f,
+        12,
+        Fade(kText, 0.1f)
+    );
+
+    DrawRectangleRounded(
+        modal,
+        0.1f,
+        12,
+        Fade({250,255,235,255}, loadModalVisibility)
+    );
+
+    DrawRectangleRoundedLinesEx(
+        modal,
+        0.1f,
+        12,
+        2.5f,
+        Fade(kPanelBorder, loadModalVisibility)
+    );
+
+    DrawText(
+        "Load Game",
+        static_cast<int>(modal.x + 26),
+        static_cast<int>(modal.y + 24),
+        34,
+        kText
+    );
+
+    DrawText(
+        "Path Save File:",
+        static_cast<int>(modal.x + 26),
+        static_cast<int>(modal.y + 92),
+        20,
+        kText
+    );
+
+    loadPathField.setBoundary({
+        modal.x + 26,
+        modal.y + 122,
+        modal.width - 52,
+        44
+    });
+
+    loadPathField.draw();
+
+    if (!loadError.empty()) {
+        const std::string shownError = fitText(
+            loadError,
+            18,
+            static_cast<int>(modal.width - 52)
+        );
+
+        DrawText(
+            shownError.c_str(),
+            static_cast<int>(modal.x + 26),
+            static_cast<int>(modal.y + 184),
+            18,
+            kDanger
+        );
+    }
+
+    confirmLoadButton.setBoundary({
+        modal.x + modal.width - 220,
+        modal.y + modal.height - 70,
+        156,
+        50
+    });
+
+    cancelLoadButton.setBoundary({
+        modal.x + modal.width - 390,
+        modal.y + modal.height - 70,
+        140,
+        50
+    });
+
+    confirmLoadButton.draw();
+    cancelLoadButton.draw();
+}
+
 void MainMenuScene::draw() {
     Rectangle screen{0, 0, static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())};
     drawBackground(screen);
@@ -351,7 +553,11 @@ void MainMenuScene::draw() {
     drawFeatureCards(screen);
     DrawText("Versi Indonesia dari permainan papan klasik dunia.", 76, static_cast<int>(screen.height - 208), 24, kText);
     DrawText("Strategi, keberuntungan, dan kecerdasan finansial.", 76, static_cast<int>(screen.height - 172), 22, kSubtext);
+
     newGameButton.draw();
+    loadGameButton.draw();
     quitButton.draw();
+
     drawSetupModal(screen);
+    drawLoadModal(screen);
 }

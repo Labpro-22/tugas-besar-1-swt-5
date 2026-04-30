@@ -15,20 +15,27 @@ public:
     void onEnter() override;
 private:
     Button newGameButton;
+    Button loadGameButton;
     Button quitButton;
     Button startGameButton;
     Button cancelButton;
     Button plusButton;
     Button minusButton;
+    Button confirmLoadButton;
+    Button cancelLoadButton;
 
     std::vector<TextField> playerFields;
     bool  showSetupModal;
     TextField configPathField;
+    TextField loadPathField;
     std::string formError;
+    std::string loadError;
     bool  showNewGameModal;
+    bool  showLoadGameModal;
     int   playerCount;
     float sceneTime;
     float modalVisibility;
+    float loadModalVisibility;
     std::string errorMsg;
 
     void layoutButtons(Rectangle sr);
@@ -36,7 +43,9 @@ private:
     void drawHero(Rectangle sr);
     void drawFeatureCards(Rectangle sr);
     void drawSetupModal(Rectangle sr);
+    void drawLoadModal(Rectangle sr);
     void onStartGame();
+    void onLoadGame();
 };
 
 #endif
