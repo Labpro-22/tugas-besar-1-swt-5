@@ -19,6 +19,7 @@ private:
     Button loadGameButton;
     Button quitButton;
     Button registerButton;
+    Button leaderboardButton;
     Button startGameButton;
     Button cancelButton;
     Button plusButton;
@@ -27,10 +28,12 @@ private:
     Button cancelLoadButton;
     Button confirmRegisterButton;
     Button cancelRegisterButton;
+    Button closeLeaderboardButton;
 
     Popup setupModalPopup;
     Popup loadModalPopup;
     Popup registerModalPopup;
+    Popup leaderboardPopup;
 
     std::vector<TextField> playerFields;
     std::vector<TextField> passwordFields;
@@ -52,6 +55,7 @@ private:
     void drawSetupModal(Rectangle sr);
     void drawLoadModal(Rectangle sr);
     void drawRegisterModal(Rectangle sr);
+    void drawLeaderboardModal(Rectangle sr);
     void onStartGame();
     void onLoadGame();
     void onRegister();

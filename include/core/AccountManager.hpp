@@ -2,6 +2,8 @@
 
 #include <map>
 #include <string>
+#include <vector>
+#include <cstddef>
 
 #include "Account.hpp"
 
@@ -24,6 +26,7 @@ public:
     // Core Methods
     void addAccount(const Account &newAccount);
     Account *getAccount(const string &name, const string &pass);
+    vector<Account> getTopAccounts(size_t limit) const;
 
     bool isUsernameTaken(const string &name) const;
 

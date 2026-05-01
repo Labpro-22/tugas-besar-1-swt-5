@@ -84,14 +84,11 @@ std::string fitText(std::string value, int fontSize, int maxWidth) {
 
 MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* am)
     : Scene(sm, gm, am),
-      configPathField("config/basic"),
-      loadPathField("data/save.txt"),
-      usernameField("Username"),
-      passwordField("Password"),
       newGameButton("New Game", kAccent, kText),
       loadGameButton("Load Game", kAccentAlt, {255,255,255,255}),
-      registerButton("Daftar", {100,180,90,255}, {255,255,255,255}),
       quitButton("Keluar", kDanger, {255,255,255,255}),
+      registerButton("Daftar", {100,180,90,255}, {255,255,255,255}),
+      leaderboardButton("Leaderboard", {255,160,30,255}, kText),
       startGameButton("Mulai!", kAccent, kText),
       cancelButton("Batal", kMuted, kText),
       plusButton("+", kAccentAlt, {255,255,255,255}),
@@ -100,9 +97,15 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
       cancelLoadButton("Batal", kMuted, kText),
       confirmRegisterButton("Daftar", kAccent, kText),
       cancelRegisterButton("Batal", kMuted, kText),
+      closeLeaderboardButton("Tutup", kMuted, kText),
       setupModalPopup(600.0f, 560.0f),
       loadModalPopup(600.0f, 340.0f),
       registerModalPopup(500.0f, 380.0f),
+      leaderboardPopup(520.0f, 430.0f),
+      configPathField("config/basic"),
+      loadPathField("data/save.txt"),
+      usernameField("Username"),
+      passwordField("Password"),
       playerCount(4),
       sceneTime(0.0f) {
 
@@ -117,6 +120,10 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
     registerModalPopup.setTitle("Daftar Akun");
     registerModalPopup.setAnimationSpeed(9.0f);
     registerModalPopup.setShowOverlay(true);
+
+    leaderboardPopup.setTitle("Leaderboard");
+    leaderboardPopup.setAnimationSpeed(9.0f);
+    leaderboardPopup.setShowOverlay(true);
 
     playerFields.emplace_back("Nama Pemain 1");
     playerFields.emplace_back("Nama Pemain 2");
@@ -144,6 +151,7 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
         setupModalPopup.setVisible(true);
         loadModalPopup.setVisible(false);
         registerModalPopup.setVisible(false);
+        leaderboardPopup.setVisible(false);
         formError.clear();
 
         if (trimCopy(configPathField.getContent()).empty()) {
@@ -155,6 +163,7 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
         loadModalPopup.setVisible(true);
         setupModalPopup.setVisible(false);
         registerModalPopup.setVisible(false);
+        leaderboardPopup.setVisible(false);
         loadError.clear();
 
         if (trimCopy(loadPathField.getContent()).empty()) {
@@ -166,9 +175,17 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
         registerModalPopup.setVisible(true);
         setupModalPopup.setVisible(false);
         loadModalPopup.setVisible(false);
+        leaderboardPopup.setVisible(false);
         registerError.clear();
         usernameField.setContent("");
         passwordField.setContent("");
+    });
+
+    leaderboardButton.setOnClick([this]() {
+        leaderboardPopup.setVisible(true);
+        setupModalPopup.setVisible(false);
+        loadModalPopup.setVisible(false);
+        registerModalPopup.setVisible(false);
     });
 
     quitButton.setOnClick([]() {
@@ -188,6 +205,10 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
     cancelRegisterButton.setOnClick([this]() {
         registerModalPopup.setVisible(false);
         registerError.clear();
+    });
+
+    closeLeaderboardButton.setOnClick([this]() {
+        leaderboardPopup.setVisible(false);
     });
 
     confirmLoadButton.setOnClick([this]() {
@@ -374,13 +395,14 @@ void MainMenuScene::onEnter() {
     setupModalPopup.setVisible(false);
     loadModalPopup.setVisible(false);
     registerModalPopup.setVisible(false);
+    leaderboardPopup.setVisible(false);
     formError.clear();
     loadError.clear();
     registerError.clear();
 }
 
 void MainMenuScene::layoutButtons(Rectangle screenRect) {
-    const float w = 160.0f;
+    const float w = 150.0f;
     const float h = 56.0f;
     const float y = screenRect.y + screenRect.height - 130.0f;
     const float left = screenRect.x + 50.0f;
@@ -388,8 +410,9 @@ void MainMenuScene::layoutButtons(Rectangle screenRect) {
 
     newGameButton.setBoundary({left, y, w, h});
     loadGameButton.setBoundary({left + (w + gap), y, w, h});
-    registerButton.setBoundary({left + (w + gap) * 2.0f, y, w, h});
-    quitButton.setBoundary({left + (w + gap) * 3.0f, y, 130.0f, h});
+    leaderboardButton.setBoundary({left + (w + gap) * 2.0f, y, w, h});
+    registerButton.setBoundary({left + (w + gap) * 3.0f, y, w, h});
+    quitButton.setBoundary({left + (w + gap) * 4.0f, y, 130.0f, h});
 }
 
 void MainMenuScene::update() {  
@@ -408,12 +431,19 @@ void MainMenuScene::update() {
     setupModalPopup.update();
     loadModalPopup.update();
     registerModalPopup.update();
+    leaderboardPopup.update();
 
     // Center popups on screen
-    if (setupModalPopup.getVisibility() >= 0.02f || loadModalPopup.getVisibility() >= 0.02f || registerModalPopup.getVisibility() >= 0.02f) {
+    if (
+        setupModalPopup.getVisibility() >= 0.02f ||
+        loadModalPopup.getVisibility() >= 0.02f ||
+        registerModalPopup.getVisibility() >= 0.02f ||
+        leaderboardPopup.getVisibility() >= 0.02f
+    ) {
         setupModalPopup.centerOnScreen();
         loadModalPopup.centerOnScreen();
         registerModalPopup.centerOnScreen();
+        leaderboardPopup.centerOnScreen();
     }
 
     if (IsKeyPressed(KEY_ESCAPE)) {
@@ -434,11 +464,22 @@ void MainMenuScene::update() {
             registerError.clear();
             return;
         }
+
+        if (leaderboardPopup.getVisibility() >= 0.02f) {
+            leaderboardPopup.setVisible(false);
+            return;
+        }
     }
 
-    if (setupModalPopup.getVisibility() < 0.02f && loadModalPopup.getVisibility() < 0.02f && registerModalPopup.getVisibility() < 0.02f) {
+    if (
+        setupModalPopup.getVisibility() < 0.02f &&
+        loadModalPopup.getVisibility() < 0.02f &&
+        registerModalPopup.getVisibility() < 0.02f &&
+        leaderboardPopup.getVisibility() < 0.02f
+    ) {
         newGameButton.update();
         loadGameButton.update();
+        leaderboardButton.update();
         registerButton.update();
         quitButton.update();
         return;
@@ -469,6 +510,18 @@ void MainMenuScene::update() {
         passwordField.update();
         confirmRegisterButton.update();
         cancelRegisterButton.update();
+    }
+
+    if (leaderboardPopup.getVisibility() >= 0.02f) {
+        Rectangle modal = leaderboardPopup.getBoundary();
+        closeLeaderboardButton.setBoundary({
+            modal.x + modal.width - 166,
+            modal.y + modal.height - 70,
+            140,
+            50
+        });
+
+        closeLeaderboardButton.update();
     }
 }
 
@@ -694,6 +747,84 @@ void MainMenuScene::drawRegisterModal(Rectangle sr) {
     cancelRegisterButton.draw();
 }
 
+void MainMenuScene::drawLeaderboardModal(Rectangle) {
+    if (leaderboardPopup.getVisibility() <= 0.01f) return;
+
+    leaderboardPopup.draw();
+
+    Rectangle modal = leaderboardPopup.getBoundary();
+    float vis = leaderboardPopup.getVisibility();
+    const int topLimit = 5;
+    std::vector<Account> topAccounts = accountManager != nullptr
+        ? accountManager->getTopAccounts(topLimit)
+        : std::vector<Account>{};
+
+    DrawText(
+        "Top 5 akun berdasarkan score",
+        static_cast<int>(modal.x + 26),
+        static_cast<int>(modal.y + 82),
+        20,
+        Fade(kSubtext, vis)
+    );
+
+    Rectangle header{
+        modal.x + 26,
+        modal.y + 120,
+        modal.width - 52,
+        34
+    };
+
+    DrawRectangleRounded(header, 0.2f, 8, Fade(kAccent, 0.18f * vis));
+    DrawText("#", static_cast<int>(header.x + 16), static_cast<int>(header.y + 8), 18, Fade(kText, vis));
+    DrawText("Nama", static_cast<int>(header.x + 62), static_cast<int>(header.y + 8), 18, Fade(kText, vis));
+    DrawText("Score", static_cast<int>(header.x + header.width - 92), static_cast<int>(header.y + 8), 18, Fade(kText, vis));
+
+    if (topAccounts.empty()) {
+        DrawText(
+            "(belum ada akun)",
+            static_cast<int>(modal.x + 26),
+            static_cast<int>(modal.y + 178),
+            22,
+            Fade(kSubtext, vis)
+        );
+    }
+
+    for (std::size_t i = 0; i < topAccounts.size(); ++i) {
+        const Account& account = topAccounts[i];
+        float y = modal.y + 164 + static_cast<float>(i) * 42.0f;
+        Rectangle row{
+            modal.x + 26,
+            y,
+            modal.width - 52,
+            34
+        };
+
+        DrawRectangleRounded(
+            row,
+            0.2f,
+            8,
+            Fade(i % 2 == 0 ? kAccentAlt : kAccent, i % 2 == 0 ? 0.08f * vis : 0.06f * vis)
+        );
+
+        std::string rank = std::to_string(i + 1);
+        std::string username = fitText(account.getUsername(), 20, static_cast<int>(row.width - 190));
+        std::string score = std::to_string(account.getScore());
+
+        DrawText(rank.c_str(), static_cast<int>(row.x + 16), static_cast<int>(row.y + 7), 20, Fade(kText, vis));
+        DrawText(username.c_str(), static_cast<int>(row.x + 62), static_cast<int>(row.y + 7), 20, Fade(kText, vis));
+        DrawText(score.c_str(), static_cast<int>(row.x + row.width - 92), static_cast<int>(row.y + 7), 20, Fade(kText, vis));
+    }
+
+    closeLeaderboardButton.setBoundary({
+        modal.x + modal.width - 166,
+        modal.y + modal.height - 70,
+        140,
+        50
+    });
+
+    closeLeaderboardButton.draw();
+}
+
 void MainMenuScene::draw() {
     Rectangle screen{0, 0, static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())};
     drawBackground(screen);
@@ -704,10 +835,12 @@ void MainMenuScene::draw() {
 
     newGameButton.draw();
     loadGameButton.draw();
+    leaderboardButton.draw();
     registerButton.draw();
     quitButton.draw();
 
     drawSetupModal(screen);
     drawLoadModal(screen);
     drawRegisterModal(screen);
+    drawLeaderboardModal(screen);
 }

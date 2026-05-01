@@ -1,4 +1,5 @@
 #include "../../include/core/AccountManager.hpp"
+#include <algorithm>
 
 using namespace std;
 
@@ -14,6 +15,25 @@ Account* AccountManager::getAccount(const string& name, const string& pass) {
         }
     }
     return nullptr;
+}
+
+vector<Account> AccountManager::getTopAccounts(size_t limit) const {
+    vector<Account> result;
+    result.reserve(accounts.size());
+
+    for (const auto& pair : accounts) {
+        result.push_back(pair.second);
+    }
+
+    sort(result.begin(), result.end(), [](const Account& a, const Account& b) {
+        return a > b;
+    });
+
+    if (result.size() > limit) {
+        result.resize(limit);
+    }
+
+    return result;
 }
 
 bool AccountManager::isUsernameTaken(const string& name) const {
