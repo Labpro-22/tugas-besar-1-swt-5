@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include "Button.hpp"
+#include "Popup.hpp"
 #include "Scene.hpp"
 #include "TextField.hpp"
 
@@ -24,18 +25,16 @@ private:
     Button confirmLoadButton;
     Button cancelLoadButton;
 
+    Popup setupModalPopup;
+    Popup loadModalPopup;
+
     std::vector<TextField> playerFields;
-    bool  showSetupModal;
     TextField configPathField;
     TextField loadPathField;
     std::string formError;
     std::string loadError;
-    bool  showNewGameModal;
-    bool  showLoadGameModal;
     int   playerCount;
     float sceneTime;
-    float modalVisibility;
-    float loadModalVisibility;
     std::string errorMsg;
 
     void layoutButtons(Rectangle sr);

@@ -91,12 +91,18 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
       minusButton("-", kAccentAlt, {255,255,255,255}),
       confirmLoadButton("Muat", kAccent, kText),
       cancelLoadButton("Batal", kMuted, kText),
-      showNewGameModal(false),
-      showLoadGameModal(false),
+      setupModalPopup(600.0f, 560.0f),
+      loadModalPopup(600.0f, 340.0f),
       playerCount(4),
-      sceneTime(0.0f),
-      modalVisibility(0.0f),
-      loadModalVisibility(0.0f) {
+      sceneTime(0.0f) {
+
+    setupModalPopup.setTitle("Atur Pemain");
+    setupModalPopup.setAnimationSpeed(9.0f);
+    setupModalPopup.setShowOverlay(true);
+
+    loadModalPopup.setTitle("Load Game");
+    loadModalPopup.setAnimationSpeed(9.0f);
+    loadModalPopup.setShowOverlay(true);
 
     playerFields.emplace_back("Nama Pemain 1");
     playerFields.emplace_back("Nama Pemain 2");
@@ -114,8 +120,8 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
     loadPathField.setMaxLength(160);
 
     newGameButton.setOnClick([this]() {
-        showNewGameModal = true;
-        showLoadGameModal = false;
+        setupModalPopup.setVisible(true);
+        loadModalPopup.setVisible(false);
         formError.clear();
 
         if (trimCopy(configPathField.getContent()).empty()) {
@@ -124,8 +130,8 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
     });
 
     loadGameButton.setOnClick([this]() {
-        showLoadGameModal = true;
-        showNewGameModal = false;
+        loadModalPopup.setVisible(true);
+        setupModalPopup.setVisible(false);
         loadError.clear();
 
         if (trimCopy(loadPathField.getContent()).empty()) {
@@ -138,12 +144,12 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
     });
 
     cancelButton.setOnClick([this]() {
-        showNewGameModal = false;
+        setupModalPopup.setVisible(false);
         formError.clear();
     });
 
     cancelLoadButton.setOnClick([this]() {
-        showLoadGameModal = false;
+        loadModalPopup.setVisible(false);
         loadError.clear();
     });
 
@@ -178,7 +184,7 @@ void MainMenuScene::onStartGame() {
 
     if (configDirectory.empty()) {
         formError = "Folder config tidak boleh kosong.";
-        showNewGameModal = true;
+        setupModalPopup.setVisible(true);
         return;
     }
 
@@ -188,13 +194,13 @@ void MainMenuScene::onStartGame() {
 
         if (name.empty()) {
             formError = "Nama pemain " + std::to_string(i + 1) + " tidak boleh kosong.";
-            showNewGameModal = true;
+            setupModalPopup.setVisible(true);
             return;
         }
 
         if (std::find(usedNames.begin(), usedNames.end(), name) != usedNames.end()) {
             formError = "Nama pemain harus unik.";
-            showNewGameModal = true;
+            setupModalPopup.setVisible(true);
             return;
         }
 
@@ -239,12 +245,12 @@ void MainMenuScene::onStartGame() {
 
         game->getTurnManager() = TurnManager(turnOrder, maxTurn);
 
-        showNewGameModal = false;
+        setupModalPopup.setVisible(false);
         formError.clear();
         sceneManager->setScene(SceneType::InGame);
     } catch (const std::exception& e) {
         formError = std::string("Gagal mulai game: ") + e.what();
-        showNewGameModal = true;
+        setupModalPopup.setVisible(true);
     }
 }
 
@@ -253,29 +259,27 @@ void MainMenuScene::onLoadGame() {
 
     if (filePath.empty()) {
         loadError = "Path save file tidak boleh kosong.";
-        showLoadGameModal = true;
+        loadModalPopup.setVisible(true);
         return;
     }
 
     try {
         gameManager->loadGame(filePath);
 
-        showLoadGameModal = false;
+        loadModalPopup.setVisible(false);
         loadError.clear();
 
         sceneManager->setScene(SceneType::InGame);
     } catch (const std::exception& e) {
         loadError = std::string("Gagal load game: ") + e.what();
-        showLoadGameModal = true;
+        loadModalPopup.setVisible(true);
     }
 }
 
 void MainMenuScene::onEnter() {
     sceneTime = 0.0f;
-    showNewGameModal = false;
-    showLoadGameModal = false;
-    modalVisibility = 0.0f;
-    loadModalVisibility = 0.0f;
+    setupModalPopup.setVisible(false);
+    loadModalPopup.setVisible(false);
     formError.clear();
     loadError.clear();
 }
@@ -304,40 +308,38 @@ void MainMenuScene::update() {
 
     layoutButtons(screen);
 
-    modalVisibility = easeTowards(
-        modalVisibility,
-        showNewGameModal ? 1.0f : 0.0f,
-        GetFrameTime() * 9.0f
-    );
+    // Update popups
+    setupModalPopup.update();
+    loadModalPopup.update();
 
-    loadModalVisibility = easeTowards(
-        loadModalVisibility,
-        showLoadGameModal ? 1.0f : 0.0f,
-        GetFrameTime() * 9.0f
-    );
+    // Center popups on screen
+    if (setupModalPopup.getVisibility() >= 0.02f || loadModalPopup.getVisibility() >= 0.02f) {
+        setupModalPopup.centerOnScreen();
+        loadModalPopup.centerOnScreen();
+    }
 
     if (IsKeyPressed(KEY_ESCAPE)) {
-        if (showNewGameModal) {
-            showNewGameModal = false;
+        if (setupModalPopup.getVisibility() >= 0.02f) {
+            setupModalPopup.setVisible(false);
             formError.clear();
             return;
         }
 
-        if (showLoadGameModal) {
-            showLoadGameModal = false;
+        if (loadModalPopup.getVisibility() >= 0.02f) {
+            loadModalPopup.setVisible(false);
             loadError.clear();
             return;
         }
     }
 
-    if (modalVisibility < 0.02f && loadModalVisibility < 0.02f) {
+    if (setupModalPopup.getVisibility() < 0.02f && loadModalPopup.getVisibility() < 0.02f) {
         newGameButton.update();
         loadGameButton.update();
         quitButton.update();
         return;
     }
 
-    if (modalVisibility >= 0.02f) {
+    if (setupModalPopup.getVisibility() >= 0.02f) {
         plusButton.update();
         minusButton.update();
         startGameButton.update();
@@ -350,7 +352,7 @@ void MainMenuScene::update() {
         configPathField.update();
     }
 
-    if (loadModalVisibility >= 0.02f) {
+    if (loadModalPopup.getVisibility() >= 0.02f) {
         loadPathField.update();
         confirmLoadButton.update();
         cancelLoadButton.update();
@@ -400,25 +402,18 @@ void MainMenuScene::drawFeatureCards(Rectangle screenRect) {
 }
 
 void MainMenuScene::drawSetupModal(Rectangle sr) {
-    if (modalVisibility <= 0.01f) return;
-    DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Fade(kText,.35f*modalVisibility));
-    float rise = (1-modalVisibility)*28;
-    Rectangle m{sr.width*.5f-300, sr.height*.5f-270+rise, 600, 540};
+    if (setupModalPopup.getVisibility() <= 0.01f) return;
 
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(kText, 0.35f * modalVisibility));
-    Rectangle modal{sr.width * 0.5f - 300.0f,
-                    sr.height * 0.5f - 280.0f + (1.0f - modalVisibility) * 28.0f,
-                    600.0f, 560.0f};
-    DrawRectangleRounded({modal.x + 6, modal.y + 10, modal.width, modal.height}, 0.1f, 12, Fade(kText, 0.1f));
-    DrawRectangleRounded(modal, 0.1f, 12, Fade({250,255,235,255}, modalVisibility));
-    DrawRectangleRoundedLinesEx(modal, 0.1f, 12, 2.5f, Fade(kPanelBorder, modalVisibility));
-    DrawText("Atur Pemain", static_cast<int>(modal.x + 26), static_cast<int>(modal.y + 24), 34, kText);
+    setupModalPopup.draw();
 
-    DrawText("Jumlah Pemain:", static_cast<int>(modal.x + 26), static_cast<int>(modal.y + 84), 22, kText);
+    Rectangle modal = setupModalPopup.getBoundary();
+    float vis = setupModalPopup.getVisibility();
+
+    DrawText("Jumlah Pemain:", static_cast<int>(modal.x + 26), static_cast<int>(modal.y + 84), 22, Fade(kText, vis));
     minusButton.setBoundary({modal.x + 196, modal.y + 74, 52, 42});
     plusButton.setBoundary({modal.x + 320, modal.y + 74, 52, 42});
-    DrawRectangleRounded({modal.x + 256, modal.y + 74, 56, 42}, 0.24f, 8, Fade(kAccent, 0.15f));
-    DrawText(std::to_string(playerCount).c_str(), static_cast<int>(modal.x + 279), static_cast<int>(modal.y + 84), 24, kText);
+    DrawRectangleRounded({modal.x + 256, modal.y + 74, 56, 42}, 0.24f, 8, Fade(kAccent, 0.15f * vis));
+    DrawText(std::to_string(playerCount).c_str(), static_cast<int>(modal.x + 279), static_cast<int>(modal.y + 84), 24, Fade(kText, vis));
     plusButton.draw();
     minusButton.draw();
 
@@ -427,18 +422,18 @@ void MainMenuScene::drawSetupModal(Rectangle sr) {
         playerFields[static_cast<std::size_t>(i)].setBoundary({modal.x + 26, fy, modal.width - 52, 44});
         playerFields[static_cast<std::size_t>(i)].draw();
         if (i >= playerCount) {
-            DrawRectangleRounded({modal.x + 26, fy, modal.width - 52, 44}, 0.22f, 8, Fade(kText, 0.3f));
-            DrawText("tidak digunakan", static_cast<int>(modal.x + modal.width - 180), static_cast<int>(fy + 12), 18, Fade(kMuted, 0.9f));
+            DrawRectangleRounded({modal.x + 26, fy, modal.width - 52, 44}, 0.22f, 8, Fade(kText, 0.3f * vis));
+            DrawText("tidak digunakan", static_cast<int>(modal.x + modal.width - 180), static_cast<int>(fy + 12), 18, Fade(kMuted, 0.9f * vis));
         }
     }
 
-    DrawText("Folder Config:", static_cast<int>(modal.x + 26), static_cast<int>(modal.y + 374), 20, kText);
+    DrawText("Folder Config:", static_cast<int>(modal.x + 26), static_cast<int>(modal.y + 374), 20, Fade(kText, vis));
     configPathField.setBoundary({modal.x + 26, modal.y + 402, modal.width - 52, 44});
     configPathField.draw();
 
     if (!formError.empty()) {
         const std::string shownError = fitText(formError, 18, static_cast<int>(modal.width - 52));
-        DrawText(shownError.c_str(), static_cast<int>(modal.x + 26), static_cast<int>(modal.y + 456), 18, kDanger);
+        DrawText(shownError.c_str(), static_cast<int>(modal.x + 26), static_cast<int>(modal.y + 456), 18, Fade(kDanger, vis));
     }
 
     startGameButton.setBoundary({modal.x + modal.width - 220, modal.y + modal.height - 70, 156, 50});
@@ -448,59 +443,19 @@ void MainMenuScene::drawSetupModal(Rectangle sr) {
 }
 
 void MainMenuScene::drawLoadModal(Rectangle sr) {
-    if (loadModalVisibility <= 0.01f) return;
+    if (loadModalPopup.getVisibility() <= 0.01f) return;
 
-    DrawRectangle(
-        0,
-        0,
-        GetScreenWidth(),
-        GetScreenHeight(),
-        Fade(kText, 0.35f * loadModalVisibility)
-    );
+    loadModalPopup.draw();
 
-    Rectangle modal{
-        sr.width * 0.5f - 300.0f,
-        sr.height * 0.5f - 170.0f + (1.0f - loadModalVisibility) * 28.0f,
-        600.0f,
-        340.0f
-    };
-
-    DrawRectangleRounded(
-        {modal.x + 6, modal.y + 10, modal.width, modal.height},
-        0.1f,
-        12,
-        Fade(kText, 0.1f)
-    );
-
-    DrawRectangleRounded(
-        modal,
-        0.1f,
-        12,
-        Fade({250,255,235,255}, loadModalVisibility)
-    );
-
-    DrawRectangleRoundedLinesEx(
-        modal,
-        0.1f,
-        12,
-        2.5f,
-        Fade(kPanelBorder, loadModalVisibility)
-    );
-
-    DrawText(
-        "Load Game",
-        static_cast<int>(modal.x + 26),
-        static_cast<int>(modal.y + 24),
-        34,
-        kText
-    );
+    Rectangle modal = loadModalPopup.getBoundary();
+    float vis = loadModalPopup.getVisibility();
 
     DrawText(
         "Path Save File:",
         static_cast<int>(modal.x + 26),
         static_cast<int>(modal.y + 92),
         20,
-        kText
+        Fade(kText, vis)
     );
 
     loadPathField.setBoundary({
@@ -524,7 +479,7 @@ void MainMenuScene::drawLoadModal(Rectangle sr) {
             static_cast<int>(modal.x + 26),
             static_cast<int>(modal.y + 184),
             18,
-            kDanger
+            Fade(kDanger, vis)
         );
     }
 

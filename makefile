@@ -33,6 +33,7 @@ SRCS := \
     $(SRC_DIR)/views/UIElement.cpp \
     $(SRC_DIR)/views/Button.cpp \
     $(SRC_DIR)/views/TextField.cpp \
+    $(SRC_DIR)/views/Popup.cpp \
     $(SRC_DIR)/views/Scene.cpp \
     $(SRC_DIR)/views/SceneManager.cpp \
     $(SRC_DIR)/views/MainMenuScene.cpp \
