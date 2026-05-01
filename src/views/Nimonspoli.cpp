@@ -22,3 +22,4 @@ void Nimonspoli::start() {
 
 void Nimonspoli::update() { sceneManager.update(); }
 void Nimonspoli::draw()   { sceneManager.draw(); }
+Nimonspoli::~Nimonspoli() {}

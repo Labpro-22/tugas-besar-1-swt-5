@@ -6,6 +6,7 @@
 
 class Nimonspoli {
 public:
+    ~Nimonspoli();
     void setup();
     void start();
 private:
