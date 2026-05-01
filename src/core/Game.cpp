@@ -25,7 +25,8 @@ Game::Game()
       logger(),
       config(),
       gameOver(false),
-      lastDiceTotal(0) {}
+      lastDiceTotal(0),
+      hasRolledThisTurn(false) {}
 
 // ──────────────────────────────────────────────
 // GAME LOOP
@@ -39,6 +40,7 @@ void Game::run() {
 
 void Game::startTurn() {
     if (players.empty() || gameOver) return;
+    hasRolledThisTurn = false;
 
     int playerIdx = turnManager.getCurrentPlayerIndex();
     Player& current = players[static_cast<size_t>(playerIdx)];
@@ -334,6 +336,7 @@ void Game::endTurn() {
 
     current.consecutiveDoubleCount = 0;
     turnManager.nextPlayer();
+    hasRolledThisTurn = false;
     checkWinCondition();
 }
 
@@ -347,7 +350,7 @@ void Game::handleLanding(Player& player) {
 }
 
 std::pair<int, int> Game::rollDiceForCurrentPlayer() {
-    if (players.empty() || gameOver || board.size() == 0) {
+    if (players.empty() || gameOver || board.size() == 0 || hasRolledThisTurn) {
         return {0, 0};
     }
 
@@ -360,6 +363,7 @@ std::pair<int, int> Game::rollDiceForCurrentPlayer() {
     auto result = dice.roll();
     int diceTotal = result.first + result.second;
     setLastDiceTotal(diceTotal);
+    hasRolledThisTurn = true;
     logger.log(turnManager.getCurrentTurn(), current.getUsername(), "DADU",
                to_string(result.first) + "+" + to_string(result.second) + "=" + to_string(diceTotal));
 
@@ -621,6 +625,10 @@ void Game::setLastDiceTotal(int total) {
 
 int Game::getLastDiceTotal() const {
     return lastDiceTotal;
+}
+
+bool Game::getHasRolledThisTurn() const {
+    return hasRolledThisTurn;
 }
 
 void Game::checkWinCondition() {

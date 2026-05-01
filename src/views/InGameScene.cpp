@@ -153,6 +153,13 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
 
     std::vector<Spec> specs = {
         {"Dadu", [this]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr || g->isGameOver()) return;
+
+            if (g->getHasRolledThisTurn()) {
+                return;
+            }
+
             showDiceModal = true;
             diceManualMode = false;
             diceError.clear();
@@ -526,6 +533,11 @@ void InGameScene::rollDiceAndShowResult() {
     Game* g = gameManager->getCurrentGame();
     if (g == nullptr || g->isGameOver()) return;
 
+    if (g->getHasRolledThisTurn()) {
+        showOverlay("Dadu", {"Dadu sudah digunakan pada giliran ini."});
+        return;
+    }
+
     auto result = g->rollDiceForCurrentPlayer();
 
     if (result.first == 0 && result.second == 0) {
@@ -563,6 +575,11 @@ void InGameScene::onManualDiceSubmit() {
     Game* g = gameManager->getCurrentGame();
     if (g == nullptr || g->isGameOver()) {
         diceError = "Dadu tidak bisa diatur saat ini.";
+        return;
+    }
+
+    if (g->getHasRolledThisTurn()) {
+        diceError = "Dadu sudah digunakan pada giliran ini.";
         return;
     }
 
@@ -700,10 +717,19 @@ void InGameScene::update(){
     float bw = (sb.width - 14) * .5f;
     float bh = 44;
     float sy = sb.y + 238;
+    bool diceButtonDisabled = false;
+
+    if (g != nullptr) {
+        diceButtonDisabled = g->isGameOver() || g->getHasRolledThisTurn();
+    }
 
     for (size_t i = 0; i < actionButtons.size(); ++i) {
         int r = static_cast<int>(i) / 2;
         int c = static_cast<int>(i) % 2;
+
+        if (i == 0) {
+            actionButtons[i].disabled = diceButtonDisabled;
+        }
 
         actionButtons[i].setBoundary({
             sb.x + c * (bw + 14),
@@ -996,6 +1022,10 @@ void InGameScene::drawSidebar(const Rectangle& sb) {
         : .5f;
 
     DrawRectangleRounded({wave.x, wave.y, wave.width * prog, wave.height}, .8f, 10, kAccent);
+
+    if (!actionButtons.empty()) {
+        actionButtons[0].disabled = g->isGameOver() || g->getHasRolledThisTurn();
+    }
 
     for (Button& b : actionButtons) {
         b.draw();
