@@ -788,15 +788,17 @@ void InGameScene::drawSidebar(const Rectangle& sb) {
     DrawText("Giliran Sekarang", int(sb.x + 16), int(sb.y + 16), 24, kText);
     DrawCircle(int(sb.x + 28), int(sb.y + 66), 11, kTokens[ci % 4]);
     DrawText(cur.getUsername().c_str(), int(sb.x + 50), int(sb.y + 52), 26, kText);
-    DrawText(("M" + std::to_string(cur.getMoney())).c_str(), int(sb.x + 16), int(sb.y + 88), 22, kAccentAlt);
+    std::string moneyStr = "M" + std::to_string(cur.getMoney());
+    DrawText(moneyStr.c_str(), int(sb.x + 16), int(sb.y + 88), 22, kAccentAlt);
 
     if (g->getBoard().size() > 0 && selectedTile >= 0 && selectedTile < g->getBoard().size()) {
         Tile* selected = g->getBoard().getTileByIndex(selectedTile);
 
         if (selected != nullptr) {
             DrawText("Petak Dipilih", int(sb.x + 16), int(sb.y + 116), 18, kText);
+            std::string tileInfo = selected->getCode() + " - " + selected->getName();
             DrawText(
-                (selected->getCode() + " - " + selected->getName()).c_str(),
+                tileInfo.c_str(),
                 int(sb.x + 16),
                 int(sb.y + 140),
                 17,
@@ -810,8 +812,9 @@ void InGameScene::drawSidebar(const Rectangle& sb) {
                     pt->isOwned() ? "OWNED" :
                     "BANK";
 
+                std::string statusText = "Status: " + status;
                 DrawText(
-                    ("Status: " + status).c_str(),
+                    statusText.c_str(),
                     int(sb.x + 16),
                     int(sb.y + 162),
                     16,
@@ -862,8 +865,9 @@ void InGameScene::drawSidebar(const Rectangle& sb) {
         const LogEntry& e = entries[entries.size() - 1 - static_cast<size_t>(i)];
         float ly = sb.y + 822 + i * 40;
 
+        std::string logEntry = "[T" + std::to_string(e.getTurn()) + "] " + e.getUsername() + " | " + e.getActionType();
         DrawText(
-            ("[T" + std::to_string(e.getTurn()) + "] " + e.getUsername() + " | " + e.getActionType()).c_str(),
+            logEntry.c_str(),
             int(sb.x + 16),
             int(ly),
             16,

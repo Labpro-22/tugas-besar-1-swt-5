@@ -18,21 +18,28 @@ private:
     Button newGameButton;
     Button loadGameButton;
     Button quitButton;
+    Button registerButton;
     Button startGameButton;
     Button cancelButton;
     Button plusButton;
     Button minusButton;
     Button confirmLoadButton;
     Button cancelLoadButton;
+    Button confirmRegisterButton;
+    Button cancelRegisterButton;
 
     Popup setupModalPopup;
     Popup loadModalPopup;
+    Popup registerModalPopup;
 
     std::vector<TextField> playerFields;
     TextField configPathField;
     TextField loadPathField;
+    TextField usernameField;
+    TextField passwordField;
     std::string formError;
     std::string loadError;
+    std::string registerError;
     int   playerCount;
     float sceneTime;
     std::string errorMsg;
@@ -43,8 +50,10 @@ private:
     void drawFeatureCards(Rectangle sr);
     void drawSetupModal(Rectangle sr);
     void drawLoadModal(Rectangle sr);
+    void drawRegisterModal(Rectangle sr);
     void onStartGame();
     void onLoadGame();
+    void onRegister();
 };
 
 #endif

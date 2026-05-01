@@ -71,7 +71,11 @@ std::string fitText(std::string value, int fontSize, int maxWidth) {
     if (MeasureText(value.c_str(), fontSize) <= maxWidth) {
         return value;
     }
-    while (!value.empty() && MeasureText((value + "...").c_str(), fontSize) > maxWidth) {
+    while (!value.empty()) {
+        std::string testString = value + "...";
+        if (MeasureText(testString.c_str(), fontSize) <= maxWidth) {
+            break;
+        }
         value.pop_back();
     }
     return value + "...";
@@ -82,8 +86,11 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
     : Scene(sm, gm, am),
       configPathField("config/basic"),
       loadPathField("data/save.txt"),
+      usernameField("Username"),
+      passwordField("Password"),
       newGameButton("New Game", kAccent, kText),
       loadGameButton("Load Game", kAccentAlt, {255,255,255,255}),
+      registerButton("Daftar", {100,180,90,255}, {255,255,255,255}),
       quitButton("Keluar", kDanger, {255,255,255,255}),
       startGameButton("Mulai!", kAccent, kText),
       cancelButton("Batal", kMuted, kText),
@@ -91,8 +98,11 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
       minusButton("-", kAccentAlt, {255,255,255,255}),
       confirmLoadButton("Muat", kAccent, kText),
       cancelLoadButton("Batal", kMuted, kText),
+      confirmRegisterButton("Daftar", kAccent, kText),
+      cancelRegisterButton("Batal", kMuted, kText),
       setupModalPopup(600.0f, 560.0f),
       loadModalPopup(600.0f, 340.0f),
+      registerModalPopup(500.0f, 380.0f),
       playerCount(4),
       sceneTime(0.0f) {
 
@@ -103,6 +113,10 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
     loadModalPopup.setTitle("Load Game");
     loadModalPopup.setAnimationSpeed(9.0f);
     loadModalPopup.setShowOverlay(true);
+
+    registerModalPopup.setTitle("Daftar Akun");
+    registerModalPopup.setAnimationSpeed(9.0f);
+    registerModalPopup.setShowOverlay(true);
 
     playerFields.emplace_back("Nama Pemain 1");
     playerFields.emplace_back("Nama Pemain 2");
@@ -119,9 +133,13 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
     loadPathField.setContent("data/save.txt");
     loadPathField.setMaxLength(160);
 
+    usernameField.setMaxLength(8);
+    passwordField.setMaxLength(32);
+
     newGameButton.setOnClick([this]() {
         setupModalPopup.setVisible(true);
         loadModalPopup.setVisible(false);
+        registerModalPopup.setVisible(false);
         formError.clear();
 
         if (trimCopy(configPathField.getContent()).empty()) {
@@ -132,11 +150,21 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
     loadGameButton.setOnClick([this]() {
         loadModalPopup.setVisible(true);
         setupModalPopup.setVisible(false);
+        registerModalPopup.setVisible(false);
         loadError.clear();
 
         if (trimCopy(loadPathField.getContent()).empty()) {
             loadPathField.setContent("data/save.txt");
         }
+    });
+
+    registerButton.setOnClick([this]() {
+        registerModalPopup.setVisible(true);
+        setupModalPopup.setVisible(false);
+        loadModalPopup.setVisible(false);
+        registerError.clear();
+        usernameField.setContent("");
+        passwordField.setContent("");
     });
 
     quitButton.setOnClick([]() {
@@ -153,8 +181,17 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
         loadError.clear();
     });
 
+    cancelRegisterButton.setOnClick([this]() {
+        registerModalPopup.setVisible(false);
+        registerError.clear();
+    });
+
     confirmLoadButton.setOnClick([this]() {
         onLoadGame();
+    });
+
+    confirmRegisterButton.setOnClick([this]() {
+        onRegister();
     });
 
     plusButton.setOnClick([this]() {
@@ -276,24 +313,65 @@ void MainMenuScene::onLoadGame() {
     }
 }
 
+void MainMenuScene::onRegister() {
+    const std::string username = trimCopy(usernameField.getContent());
+    const std::string password = trimCopy(passwordField.getContent());
+
+    if (username.empty()) {
+        registerError = "Username tidak boleh kosong.";
+        registerModalPopup.setVisible(true);
+        return;
+    }
+
+    if (password.empty()) {
+        registerError = "Password tidak boleh kosong.";
+        registerModalPopup.setVisible(true);
+        return;
+    }
+
+    if (username.length() > 8) {
+        registerError = "Username maksimal 8 karakter.";
+        registerModalPopup.setVisible(true);
+        return;
+    }
+
+    if (accountManager->isUsernameTaken(username)) {
+        registerError = "Username sudah digunakan.";
+        registerModalPopup.setVisible(true);
+        return;
+    }
+
+    try {
+        accountManager->addAccount(Account(username, password, 0));
+        registerModalPopup.setVisible(false);
+        registerError.clear();
+    } catch (const std::exception& e) {
+        registerError = std::string("Gagal membuat akun: ") + e.what();
+        registerModalPopup.setVisible(true);
+    }
+}
+
 void MainMenuScene::onEnter() {
     sceneTime = 0.0f;
     setupModalPopup.setVisible(false);
     loadModalPopup.setVisible(false);
+    registerModalPopup.setVisible(false);
     formError.clear();
     loadError.clear();
+    registerError.clear();
 }
 
 void MainMenuScene::layoutButtons(Rectangle screenRect) {
-    const float w = 190.0f;
+    const float w = 160.0f;
     const float h = 56.0f;
     const float y = screenRect.y + screenRect.height - 130.0f;
-    const float left = screenRect.x + 72.0f;
-    const float gap = 16.0f;
+    const float left = screenRect.x + 50.0f;
+    const float gap = 12.0f;
 
     newGameButton.setBoundary({left, y, w, h});
     loadGameButton.setBoundary({left + (w + gap), y, w, h});
-    quitButton.setBoundary({left + (w + gap) * 2.0f, y, 130.0f, h});
+    registerButton.setBoundary({left + (w + gap) * 2.0f, y, w, h});
+    quitButton.setBoundary({left + (w + gap) * 3.0f, y, 130.0f, h});
 }
 
 void MainMenuScene::update() {  
@@ -311,11 +389,13 @@ void MainMenuScene::update() {
     // Update popups
     setupModalPopup.update();
     loadModalPopup.update();
+    registerModalPopup.update();
 
     // Center popups on screen
-    if (setupModalPopup.getVisibility() >= 0.02f || loadModalPopup.getVisibility() >= 0.02f) {
+    if (setupModalPopup.getVisibility() >= 0.02f || loadModalPopup.getVisibility() >= 0.02f || registerModalPopup.getVisibility() >= 0.02f) {
         setupModalPopup.centerOnScreen();
         loadModalPopup.centerOnScreen();
+        registerModalPopup.centerOnScreen();
     }
 
     if (IsKeyPressed(KEY_ESCAPE)) {
@@ -330,11 +410,18 @@ void MainMenuScene::update() {
             loadError.clear();
             return;
         }
+
+        if (registerModalPopup.getVisibility() >= 0.02f) {
+            registerModalPopup.setVisible(false);
+            registerError.clear();
+            return;
+        }
     }
 
-    if (setupModalPopup.getVisibility() < 0.02f && loadModalPopup.getVisibility() < 0.02f) {
+    if (setupModalPopup.getVisibility() < 0.02f && loadModalPopup.getVisibility() < 0.02f && registerModalPopup.getVisibility() < 0.02f) {
         newGameButton.update();
         loadGameButton.update();
+        registerButton.update();
         quitButton.update();
         return;
     }
@@ -356,6 +443,13 @@ void MainMenuScene::update() {
         loadPathField.update();
         confirmLoadButton.update();
         cancelLoadButton.update();
+    }
+
+    if (registerModalPopup.getVisibility() >= 0.02f) {
+        usernameField.update();
+        passwordField.update();
+        confirmRegisterButton.update();
+        cancelRegisterButton.update();
     }
 }
 
@@ -501,6 +595,82 @@ void MainMenuScene::drawLoadModal(Rectangle sr) {
     cancelLoadButton.draw();
 }
 
+void MainMenuScene::drawRegisterModal(Rectangle sr) {
+    if (registerModalPopup.getVisibility() <= 0.01f) return;
+
+    registerModalPopup.draw();
+
+    Rectangle modal = registerModalPopup.getBoundary();
+    float vis = registerModalPopup.getVisibility();
+
+    DrawText(
+        "Username:",
+        static_cast<int>(modal.x + 26),
+        static_cast<int>(modal.y + 84),
+        20,
+        Fade(kText, vis)
+    );
+
+    usernameField.setBoundary({
+        modal.x + 26,
+        modal.y + 114,
+        modal.width - 52,
+        44
+    });
+
+    usernameField.draw();
+
+    DrawText(
+        "Password:",
+        static_cast<int>(modal.x + 26),
+        static_cast<int>(modal.y + 176),
+        20,
+        Fade(kText, vis)
+    );
+
+    passwordField.setBoundary({
+        modal.x + 26,
+        modal.y + 206,
+        modal.width - 52,
+        44
+    });
+
+    passwordField.draw();
+
+    if (!registerError.empty()) {
+        const std::string shownError = fitText(
+            registerError,
+            18,
+            static_cast<int>(modal.width - 52)
+        );
+
+        DrawText(
+            shownError.c_str(),
+            static_cast<int>(modal.x + 26),
+            static_cast<int>(modal.y + 260),
+            18,
+            Fade(kDanger, vis)
+        );
+    }
+
+    confirmRegisterButton.setBoundary({
+        modal.x + modal.width - 220,
+        modal.y + modal.height - 70,
+        156,
+        50
+    });
+
+    cancelRegisterButton.setBoundary({
+        modal.x + modal.width - 390,
+        modal.y + modal.height - 70,
+        140,
+        50
+    });
+
+    confirmRegisterButton.draw();
+    cancelRegisterButton.draw();
+}
+
 void MainMenuScene::draw() {
     Rectangle screen{0, 0, static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())};
     drawBackground(screen);
@@ -511,8 +681,10 @@ void MainMenuScene::draw() {
 
     newGameButton.draw();
     loadGameButton.draw();
+    registerButton.draw();
     quitButton.draw();
 
     drawSetupModal(screen);
     drawLoadModal(screen);
+    drawRegisterModal(screen);
 }
