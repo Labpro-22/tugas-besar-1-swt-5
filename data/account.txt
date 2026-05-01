@@ -1,5 +1,6 @@
 === Account Data ===
 admin admin123 999
+ellen dubaicuwikuki 0
 guest guest123 0
 guest123 guest123 0
 ishak pass123 100

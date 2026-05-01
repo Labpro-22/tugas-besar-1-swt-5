@@ -33,6 +33,7 @@ private:
     Popup registerModalPopup;
 
     std::vector<TextField> playerFields;
+    std::vector<TextField> passwordFields;
     TextField configPathField;
     TextField loadPathField;
     TextField usernameField;

@@ -122,6 +122,10 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
     playerFields.emplace_back("Nama Pemain 2");
     playerFields.emplace_back("Nama Pemain 3");
     playerFields.emplace_back("Nama Pemain 4");
+    passwordFields.emplace_back("Password Pemain 1");
+    passwordFields.emplace_back("Password Pemain 2");
+    passwordFields.emplace_back("Password Pemain 3");
+    passwordFields.emplace_back("Password Pemain 4");
 
     for (TextField& field : playerFields) {
         field.setMaxLength(8);
@@ -212,9 +216,12 @@ MainMenuScene::MainMenuScene(SceneManager* sm, GameManager* gm, AccountManager* 
 void MainMenuScene::onStartGame() {
     std::vector<std::string> names;
     names.reserve(static_cast<std::size_t>(playerCount));
+    std::vector<std::string> passwords;
+    passwords.reserve(static_cast<std::size_t>(playerCount));
 
     for (int i = 0; i < playerCount; ++i) {
         names.push_back(trimCopy(playerFields[static_cast<std::size_t>(i)].getContent()));
+        passwords.push_back(trimCopy(passwordFields[static_cast<std::size_t>(i)].getContent()));
     }
 
     const std::string configDirectory = trimCopy(configPathField.getContent());
@@ -224,10 +231,11 @@ void MainMenuScene::onStartGame() {
         setupModalPopup.setVisible(true);
         return;
     }
-
-    std::vector<std::string> usedNames;
+    
+    std::vector<Account*> usedAccounts;
     for (int i = 0; i < playerCount; ++i) {
         const std::string& name = names[static_cast<std::size_t>(i)];
+        const std::string& pass = passwords[static_cast<std::size_t>(i)];
 
         if (name.empty()) {
             formError = "Nama pemain " + std::to_string(i + 1) + " tidak boleh kosong.";
@@ -235,13 +243,27 @@ void MainMenuScene::onStartGame() {
             return;
         }
 
-        if (std::find(usedNames.begin(), usedNames.end(), name) != usedNames.end()) {
-            formError = "Nama pemain harus unik.";
+        if (pass.empty()) {
+            formError = "Password pemain " + std::to_string(i + 1) + " tidak boleh kosong.";
             setupModalPopup.setVisible(true);
             return;
         }
 
-        usedNames.push_back(name);
+        Account* currentAccount = accountManager->getAccount(name, pass);
+
+        if (currentAccount == nullptr) {
+            formError = "Username / password salah";
+            setupModalPopup.setVisible(true);
+            return;
+        }
+        
+        if (std::find(usedAccounts.begin(), usedAccounts.end(), currentAccount) != usedAccounts.end()) {
+            formError = "Akun pemain harus unik.";
+            setupModalPopup.setVisible(true);
+            return;
+        }
+        
+        usedAccounts.push_back(currentAccount);
     }
 
     try {
@@ -271,11 +293,7 @@ void MainMenuScene::onStartGame() {
         for (int i = 0; i < playerCount; ++i) {
             const std::string& username = names[static_cast<std::size_t>(i)];
 
-            if (!accountManager->isUsernameTaken(username)) {
-                accountManager->addAccount(Account(username, "pass", 0));
-            }
-
-            Account* account = accountManager->getAccount(username, "pass");
+            Account* account = usedAccounts[static_cast<std::size_t>(i)];
             players.emplace_back(i, account, startMoney);
             turnOrder.push_back(i);
         }
@@ -434,6 +452,7 @@ void MainMenuScene::update() {
 
         for (int i = 0; i < playerCount; ++i) {
             playerFields[static_cast<std::size_t>(i)].update();
+            passwordFields[static_cast<std::size_t>(i)].update();
         }
 
         configPathField.update();
@@ -513,11 +532,15 @@ void MainMenuScene::drawSetupModal(Rectangle sr) {
 
     for (int i = 0; i < 4; ++i) {
         float fy = modal.y + 140 + i * 56;
-        playerFields[static_cast<std::size_t>(i)].setBoundary({modal.x + 26, fy, modal.width - 52, 44});
+        playerFields[static_cast<std::size_t>(i)].setBoundary({modal.x + 26, fy, modal.width/2 - 39, 44});
         playerFields[static_cast<std::size_t>(i)].draw();
+        passwordFields[static_cast<std::size_t>(i)].setBoundary({modal.x + modal.width/2 + 13, fy, modal.width/2 - 39, 44});
+        passwordFields[static_cast<std::size_t>(i)].draw();
         if (i >= playerCount) {
-            DrawRectangleRounded({modal.x + 26, fy, modal.width - 52, 44}, 0.22f, 8, Fade(kText, 0.3f * vis));
-            DrawText("tidak digunakan", static_cast<int>(modal.x + modal.width - 180), static_cast<int>(fy + 12), 18, Fade(kMuted, 0.9f * vis));
+            DrawRectangleRounded({modal.x + 26, fy, modal.width/2 - 39, 44}, 0.22f, 8, Fade(kText, 0.3f * vis));
+            DrawText("x", static_cast<int>(modal.x + modal.width/2 - 26 - 13), static_cast<int>(fy + 12), 18, Fade(kMuted, 0.9f * vis));
+            DrawRectangleRounded({modal.x + modal.width/2 + 13, fy, modal.width/2 - 39, 44}, 0.22f, 8, Fade(kText, 0.3f * vis));
+            DrawText("x", static_cast<int>(modal.x + modal.width - 26 - 26), static_cast<int>(fy + 12), 18, Fade(kMuted, 0.9f * vis));
         }
     }
 
