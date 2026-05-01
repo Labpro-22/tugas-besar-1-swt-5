@@ -24,6 +24,8 @@ private:
     Button diceManualConfirmButton;
     Button diceBackButton;
     Button diceCancelButton;
+    Button openLogButton;
+    Button closeLogButton;
     TextField savePathField;
     TextField diceOneField;
     TextField diceTwoField;
@@ -49,6 +51,9 @@ private:
     std::string diceError;
     float diceModalVis;
 
+    bool showLogModal;
+    float logModalVis;
+
     void layoutUi(Rectangle sr, Rectangle& br, Rectangle& sb);
     Rectangle getTileRect(const Rectangle& br, int idx) const;
     Vector2   getTileCenter(const Rectangle& br, int idx) const;
@@ -67,6 +72,7 @@ private:
 
     void drawSaveModal(Rectangle sr);
     void drawDiceModal(Rectangle sr);
+    void drawLogModal(Rectangle sr);
     void onSaveGame();
     void rollDiceAndShowResult();
     void onManualDiceSubmit();

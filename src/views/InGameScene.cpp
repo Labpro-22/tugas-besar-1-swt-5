@@ -100,6 +100,21 @@ namespace {
 
         return value.substr(first, last - first);
     }
+
+    std::string fitText(const std::string& value, int fontSize, int maxWidth) {
+        if (MeasureText(value.c_str(), fontSize) <= maxWidth) {
+            return value;
+        }
+
+        const std::string suffix = "...";
+        std::string result = value;
+
+        while (!result.empty() && MeasureText((result + suffix).c_str(), fontSize) > maxWidth) {
+            result.pop_back();
+        }
+
+        return result.empty() ? suffix : result + suffix;
+    }
 }
 
 InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
@@ -113,6 +128,8 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
       diceManualConfirmButton("Gunakan", kAccentAlt, {255,255,255,255}),
       diceBackButton("Kembali", kPanelBorder, kText),
       diceCancelButton("Batal", kDanger, {255,255,255,255}),
+      openLogButton("Buka Log", kAccentAlt, {255,255,255,255}),
+      closeLogButton("X", kDanger, {255,255,255,255}),
       savePathField("data/save.txt"),
       diceOneField("1-6"),
       diceTwoField("1-6"),
@@ -124,7 +141,9 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
       saveModalVis(0),
       showDiceModal(false),
       diceManualMode(false),
-      diceModalVis(0) {
+      diceModalVis(0),
+      showLogModal(false),
+      logModalVis(0) {
 
     auto selectedPropertyCode = [this](Game* g, std::string& code) -> bool {
         if (g == nullptr || g->getBoard().size() == 0) {
@@ -506,6 +525,15 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
         diceError.clear();
     });
 
+    openLogButton.setOnClick([this]() {
+        showLogModal = true;
+        overlayOpen = false;
+    });
+
+    closeLogButton.setOnClick([this]() {
+        showLogModal = false;
+    });
+
     backToMenuBtn.setOnClick([this]() {
         sceneManager->setScene(SceneType::MainMenu);
     });
@@ -523,6 +551,8 @@ void InGameScene::onEnter() {
     diceManualMode = false;
     diceModalVis = 0;
     diceError.clear();
+    showLogModal = false;
+    logModalVis = 0;
 
     tokenPos.clear();
     tokenPhase.clear();
@@ -664,6 +694,7 @@ void InGameScene::updateAnimations(const Rectangle& br){
     overlayVis=ease(overlayVis,overlayOpen?1.f:0.f,dt*8);
     saveModalVis = ease(saveModalVis, showSaveModal ? 1.f : 0.f, dt * 8);
     diceModalVis = ease(diceModalVis, showDiceModal ? 1.f : 0.f, dt * 8);
+    logModalVis = ease(logModalVis, showLogModal ? 1.f : 0.f, dt * 8);
 }
 
 void InGameScene::update(){
@@ -676,6 +707,11 @@ void InGameScene::update(){
     for(int i=0;i<tileCount;++i) tileRects.push_back(getTileRect(br,i));
     updateAnimations(br);
     if (IsKeyPressed(KEY_ESCAPE)) {
+        if (showLogModal) {
+            showLogModal = false;
+            return;
+        }
+
         if (showDiceModal) {
             showDiceModal = false;
             diceManualMode = false;
@@ -697,7 +733,7 @@ void InGameScene::update(){
         }
     }
 
-    if (saveModalVis < .02f && diceModalVis < .02f && overlayVis < .02f && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+    if (saveModalVis < .02f && diceModalVis < .02f && logModalVis < .02f && overlayVis < .02f && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
         Vector2 m = GetMousePosition();
 
         for (size_t i = 0; i < tileRects.size(); ++i) {
@@ -710,7 +746,7 @@ void InGameScene::update(){
 
     backToMenuBtn.setBoundary({sr.width - 130, 22, 106, 42});
 
-    if (saveModalVis < .02f && diceModalVis < .02f && overlayVis < .02f) {
+    if (saveModalVis < .02f && diceModalVis < .02f && logModalVis < .02f && overlayVis < .02f) {
         backToMenuBtn.update();
     }
 
@@ -738,9 +774,20 @@ void InGameScene::update(){
             bh
         });
 
-        if (saveModalVis < .02f && diceModalVis < .02f && overlayVis < .02f) {
+        if (saveModalVis < .02f && diceModalVis < .02f && logModalVis < .02f && overlayVis < .02f) {
             actionButtons[i].update();
         }
+    }
+
+    openLogButton.setBoundary({
+        sb.x + 16,
+        sb.y + 800,
+        sb.width - 32,
+        46
+    });
+
+    if (saveModalVis < .02f && diceModalVis < .02f && logModalVis < .02f && overlayVis < .02f) {
+        openLogButton.update();
     }
 
     if (overlayVis > .01f) {
@@ -855,6 +902,24 @@ void InGameScene::update(){
             diceManualButton.update();
             diceCancelButton.update();
         }
+    }
+
+    if (logModalVis > .01f) {
+        Rectangle p{
+            sr.width * .5f - 340,
+            sr.height * .5f - 302 + (1 - logModalVis) * 24,
+            680,
+            604
+        };
+
+        closeLogButton.setBoundary({
+            p.x + p.width - 62,
+            p.y + 12,
+            50,
+            38
+        });
+
+        closeLogButton.update();
     }
 }
 
@@ -1053,32 +1118,7 @@ void InGameScene::drawSidebar(const Rectangle& sb) {
         DrawText(row.c_str(), int(sb.x + 36), int(py), 17, int(i) == ci ? kText : kSubtext);
     }
 
-    DrawText("Log Terbaru", int(sb.x + 16), int(sb.y + 790), 22, kText);
-
-    auto entries = g->getLogger().getEntries();
-    int logCount = std::min<int>(4, static_cast<int>(entries.size()));
-
-    for (int i = 0; i < logCount; ++i) {
-        const LogEntry& e = entries[entries.size() - 1 - static_cast<size_t>(i)];
-        float ly = sb.y + 822 + i * 40;
-
-        std::string logEntry = "[T" + std::to_string(e.getTurn()) + "] " + e.getUsername() + " | " + e.getActionType();
-        DrawText(
-            logEntry.c_str(),
-            int(sb.x + 16),
-            int(ly),
-            16,
-            kText
-        );
-
-        DrawText(
-            e.getDetail().c_str(),
-            int(sb.x + 16),
-            int(ly + 17),
-            15,
-            kSubtext
-        );
-    }
+    openLogButton.draw();
 }
 
 void InGameScene::drawOverlay(Rectangle sr) {
@@ -1358,6 +1398,122 @@ void InGameScene::drawDiceModal(Rectangle sr) {
     }
 }
 
+void InGameScene::drawLogModal(Rectangle sr) {
+    if (logModalVis <= .01f || !showLogModal) return;
+
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr) return;
+
+    DrawRectangle(
+        0,
+        0,
+        GetScreenWidth(),
+        GetScreenHeight(),
+        Fade(kText, .38f * logModalVis)
+    );
+
+    Rectangle p{
+        sr.width * .5f - 340,
+        sr.height * .5f - 302 + (1 - logModalVis) * 24,
+        680,
+        604
+    };
+
+    DrawRectangleRounded(
+        {p.x + 5, p.y + 9, p.width, p.height},
+        .09f,
+        10,
+        Fade(kText, .12f * logModalVis)
+    );
+
+    DrawRectangleRounded(
+        p,
+        .09f,
+        10,
+        Fade({250,255,235,255}, logModalVis)
+    );
+
+    DrawRectangleRoundedLinesEx(
+        p,
+        .09f,
+        10,
+        2.5f,
+        Fade(kPanelBorder, logModalVis)
+    );
+
+    drawSmallFlower(p.x + p.width - 28, p.y + 28, 14, sceneTime * .5f, .5f * logModalVis);
+
+    DrawText(
+        "Log Permainan",
+        static_cast<int>(p.x + 24),
+        static_cast<int>(p.y + 24),
+        32,
+        kText
+    );
+
+    closeLogButton.setBoundary({
+        p.x + p.width - 62,
+        p.y + 12,
+        50,
+        38
+    });
+    closeLogButton.draw();
+
+    auto entries = g->getLogger().getEntries();
+    Rectangle listArea{
+        p.x + 24,
+        p.y + 78,
+        p.width - 48,
+        p.height - 104
+    };
+
+    if (entries.empty()) {
+        DrawText(
+            "(belum ada log)",
+            static_cast<int>(listArea.x),
+            static_cast<int>(listArea.y + 8),
+            20,
+            kSubtext
+        );
+        return;
+    }
+
+    int logCount = std::min<int>(10, static_cast<int>(entries.size()));
+    int maxTextWidth = static_cast<int>(listArea.width - 28);
+
+    for (int i = 0; i < logCount; ++i) {
+        const LogEntry& e = entries[entries.size() - 1 - static_cast<size_t>(i)];
+        float rowY = listArea.y + i * 48;
+        Rectangle row{
+            listArea.x,
+            rowY,
+            listArea.width,
+            40
+        };
+
+        DrawRectangleRounded(row, .18f, 8, Fade(kAccentAlt, i % 2 == 0 ? .08f : .04f));
+
+        std::string header = "[T" + std::to_string(e.getTurn()) + "] " + e.getUsername() + " | " + e.getActionType();
+        std::string detail = fitText(e.getDetail(), 17, maxTextWidth);
+
+        DrawText(
+            fitText(header, 18, maxTextWidth).c_str(),
+            static_cast<int>(row.x + 14),
+            static_cast<int>(row.y + 5),
+            18,
+            kText
+        );
+
+        DrawText(
+            detail.c_str(),
+            static_cast<int>(row.x + 14),
+            static_cast<int>(row.y + 24),
+            17,
+            kSubtext
+        );
+    }
+}
+
 void InGameScene::draw() {
     Rectangle sr{
         0,
@@ -1378,4 +1534,5 @@ void InGameScene::draw() {
     drawOverlay(sr);
     drawSaveModal(sr);
     drawDiceModal(sr);
+    drawLogModal(sr);
 }
