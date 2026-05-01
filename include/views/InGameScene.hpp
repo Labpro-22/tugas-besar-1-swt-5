@@ -19,7 +19,14 @@ private:
     Button backToMenuBtn;
     Button saveConfirmButton;
     Button saveCancelButton;
+    Button diceRollButton;
+    Button diceManualButton;
+    Button diceManualConfirmButton;
+    Button diceBackButton;
+    Button diceCancelButton;
     TextField savePathField;
+    TextField diceOneField;
+    TextField diceTwoField;
     
     std::vector<Rectangle> tileRects;
     std::vector<Vector2> tokenPos;
@@ -36,6 +43,11 @@ private:
     bool showSaveModal;
     std::string saveError;
     float saveModalVis;
+
+    bool showDiceModal;
+    bool diceManualMode;
+    std::string diceError;
+    float diceModalVis;
 
     void layoutUi(Rectangle sr, Rectangle& br, Rectangle& sb);
     Rectangle getTileRect(const Rectangle& br, int idx) const;
@@ -54,7 +66,10 @@ private:
     );
 
     void drawSaveModal(Rectangle sr);
+    void drawDiceModal(Rectangle sr);
     void onSaveGame();
+    void rollDiceAndShowResult();
+    void onManualDiceSubmit();
 };
 
 #endif

@@ -108,13 +108,23 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
       backToMenuBtn("Menu", kSubtext, {255,255,255,255}),
       saveConfirmButton("Simpan", kAccent, kText),
       saveCancelButton("Batal", kPanelBorder, kText),
+      diceRollButton("Lempar Dadu", kAccentAlt, {255,255,255,255}),
+      diceManualButton("Atur Dadu", kAccent, kText),
+      diceManualConfirmButton("Gunakan", kAccentAlt, {255,255,255,255}),
+      diceBackButton("Kembali", kPanelBorder, kText),
+      diceCancelButton("Batal", kDanger, {255,255,255,255}),
       savePathField("data/save.txt"),
+      diceOneField("1-6"),
+      diceTwoField("1-6"),
       sceneTime(0),
       selectedTile(0),
       overlayOpen(false),
       overlayVis(0),
       showSaveModal(false),
-      saveModalVis(0) {
+      saveModalVis(0),
+      showDiceModal(false),
+      diceManualMode(false),
+      diceModalVis(0) {
 
     auto selectedPropertyCode = [this](Game* g, std::string& code) -> bool {
         if (g == nullptr || g->getBoard().size() == 0) {
@@ -142,24 +152,20 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
     };
 
     std::vector<Spec> specs = {
-        {"Lempar Dadu", [this]() {
+        {"Dadu", [this]() {
             Game* g = gameManager->getCurrentGame();
             if (g == nullptr || g->isGameOver()) return;
 
-            auto result = g->rollDiceForCurrentPlayer();
-
-            if (result.first == 0 && result.second == 0) {
-                showOverlay("Dadu", {"Dadu tidak bisa dilempar saat ini."});
+            if (g->getHasRolledThisTurn()) {
                 return;
             }
 
-            showOverlay(
-                "Dadu",
-                {
-                    "Hasil: " + std::to_string(result.first) + " + " + std::to_string(result.second),
-                    "Total langkah: " + std::to_string(result.first + result.second)
-                }
-            );
+            showDiceModal = true;
+            diceManualMode = false;
+            diceError.clear();
+            diceOneField.setContent("");
+            diceTwoField.setContent("");
+            overlayOpen = false;
         }},
 
         {"Beli", [this]() {
@@ -469,6 +475,36 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
 
     savePathField.setMaxLength(160);
     savePathField.setContent("data/save.txt");
+    diceOneField.setMaxLength(2);
+    diceTwoField.setMaxLength(2);
+
+    diceRollButton.setOnClick([this]() {
+        showDiceModal = false;
+        diceError.clear();
+        rollDiceAndShowResult();
+    });
+
+    diceManualButton.setOnClick([this]() {
+        diceManualMode = true;
+        diceError.clear();
+        diceOneField.setContent("");
+        diceTwoField.setContent("");
+    });
+
+    diceManualConfirmButton.setOnClick([this]() {
+        onManualDiceSubmit();
+    });
+
+    diceBackButton.setOnClick([this]() {
+        diceManualMode = false;
+        diceError.clear();
+    });
+
+    diceCancelButton.setOnClick([this]() {
+        showDiceModal = false;
+        diceManualMode = false;
+        diceError.clear();
+    });
 
     backToMenuBtn.setOnClick([this]() {
         sceneManager->setScene(SceneType::MainMenu);
@@ -483,10 +519,81 @@ void InGameScene::onEnter() {
     showSaveModal = false;
     saveModalVis = 0;
     saveError.clear();
+    showDiceModal = false;
+    diceManualMode = false;
+    diceModalVis = 0;
+    diceError.clear();
 
     tokenPos.clear();
     tokenPhase.clear();
     selectedTile = 0;
+}
+
+void InGameScene::rollDiceAndShowResult() {
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr || g->isGameOver()) return;
+
+    if (g->getHasRolledThisTurn()) {
+        showOverlay("Dadu", {"Dadu sudah digunakan pada giliran ini."});
+        return;
+    }
+
+    auto result = g->rollDiceForCurrentPlayer();
+
+    if (result.first == 0 && result.second == 0) {
+        showOverlay("Dadu", {"Dadu tidak bisa dilempar saat ini."});
+        return;
+    }
+
+    showOverlay(
+        "Dadu",
+        {
+            "Hasil: " + std::to_string(result.first) + " + " + std::to_string(result.second),
+            "Total langkah: " + std::to_string(result.first + result.second)
+        }
+    );
+}
+
+void InGameScene::onManualDiceSubmit() {
+    auto parseDie = [](const std::string& text, int& value) -> bool {
+        if (text.size() != 1 || !std::isdigit(static_cast<unsigned char>(text[0]))) {
+            return false;
+        }
+
+        value = text[0] - '0';
+        return true;
+    };
+
+    int d1 = 0;
+    int d2 = 0;
+
+    if (!parseDie(diceOneField.getContent(), d1) || !parseDie(diceTwoField.getContent(), d2)) {
+        diceError = "Masukkan angka 1 sampai 6 untuk masing-masing dadu.";
+        return;
+    }
+
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr || g->isGameOver()) {
+        diceError = "Dadu tidak bisa diatur saat ini.";
+        return;
+    }
+
+    if (g->getHasRolledThisTurn()) {
+        diceError = "Dadu sudah digunakan pada giliran ini.";
+        return;
+    }
+
+    try {
+        g->getDice().setManual(d1, d2);
+    } catch (const std::exception& e) {
+        diceError = e.what();
+        return;
+    }
+
+    showDiceModal = false;
+    diceManualMode = false;
+    diceError.clear();
+    rollDiceAndShowResult();
 }
 
 void InGameScene::onSaveGame() {
@@ -556,6 +663,7 @@ void InGameScene::updateAnimations(const Rectangle& br){
         tokenPhase[i]+=dt*(1.1f+i*.12f);}
     overlayVis=ease(overlayVis,overlayOpen?1.f:0.f,dt*8);
     saveModalVis = ease(saveModalVis, showSaveModal ? 1.f : 0.f, dt * 8);
+    diceModalVis = ease(diceModalVis, showDiceModal ? 1.f : 0.f, dt * 8);
 }
 
 void InGameScene::update(){
@@ -568,6 +676,13 @@ void InGameScene::update(){
     for(int i=0;i<tileCount;++i) tileRects.push_back(getTileRect(br,i));
     updateAnimations(br);
     if (IsKeyPressed(KEY_ESCAPE)) {
+        if (showDiceModal) {
+            showDiceModal = false;
+            diceManualMode = false;
+            diceError.clear();
+            return;
+        }
+
         if (showSaveModal) {
             showSaveModal = false;
             saveError.clear();
@@ -582,7 +697,7 @@ void InGameScene::update(){
         }
     }
 
-    if (saveModalVis < .02f && overlayVis < .02f && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+    if (saveModalVis < .02f && diceModalVis < .02f && overlayVis < .02f && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
         Vector2 m = GetMousePosition();
 
         for (size_t i = 0; i < tileRects.size(); ++i) {
@@ -595,17 +710,26 @@ void InGameScene::update(){
 
     backToMenuBtn.setBoundary({sr.width - 130, 22, 106, 42});
 
-    if (saveModalVis < .02f && overlayVis < .02f) {
+    if (saveModalVis < .02f && diceModalVis < .02f && overlayVis < .02f) {
         backToMenuBtn.update();
     }
 
     float bw = (sb.width - 14) * .5f;
     float bh = 44;
     float sy = sb.y + 238;
+    bool diceButtonDisabled = false;
+
+    if (g != nullptr) {
+        diceButtonDisabled = g->isGameOver() || g->getHasRolledThisTurn();
+    }
 
     for (size_t i = 0; i < actionButtons.size(); ++i) {
         int r = static_cast<int>(i) / 2;
         int c = static_cast<int>(i) % 2;
+
+        if (i == 0) {
+            actionButtons[i].disabled = diceButtonDisabled;
+        }
 
         actionButtons[i].setBoundary({
             sb.x + c * (bw + 14),
@@ -614,7 +738,7 @@ void InGameScene::update(){
             bh
         });
 
-        if (saveModalVis < .02f && overlayVis < .02f) {
+        if (saveModalVis < .02f && diceModalVis < .02f && overlayVis < .02f) {
             actionButtons[i].update();
         }
     }
@@ -662,6 +786,75 @@ void InGameScene::update(){
         savePathField.update();
         saveConfirmButton.update();
         saveCancelButton.update();
+    }
+
+    if (diceModalVis > .01f) {
+        Rectangle p{
+            sr.width * .5f - 280,
+            sr.height * .5f - 170 + (1 - diceModalVis) * 24,
+            560,
+            340
+        };
+
+        if (diceManualMode) {
+            diceOneField.setBoundary({
+                p.x + 80,
+                p.y + 132,
+                150,
+                52
+            });
+
+            diceTwoField.setBoundary({
+                p.x + p.width - 230,
+                p.y + 132,
+                150,
+                52
+            });
+
+            diceManualConfirmButton.setBoundary({
+                p.x + p.width - 204,
+                p.y + p.height - 72,
+                156,
+                50
+            });
+
+            diceBackButton.setBoundary({
+                p.x + 48,
+                p.y + p.height - 72,
+                140,
+                50
+            });
+
+            diceOneField.update();
+            diceTwoField.update();
+            diceManualConfirmButton.update();
+            diceBackButton.update();
+        } else {
+            diceRollButton.setBoundary({
+                p.x + 48,
+                p.y + 128,
+                p.width - 96,
+                52
+            });
+
+            diceManualButton.setBoundary({
+                p.x + 48,
+                p.y + 196,
+                p.width - 96,
+                52
+            });
+
+            diceCancelButton.setBoundary({
+                p.x + p.width - 188,
+                p.y + p.height - 72,
+                140,
+                50
+            });
+
+            diceRollButton.update();
+            diceManualButton.update();
+            diceCancelButton.update();
+        }
     }
 }
 
@@ -832,6 +1025,10 @@ void InGameScene::drawSidebar(const Rectangle& sb) {
         : .5f;
 
     DrawRectangleRounded({wave.x, wave.y, wave.width * prog, wave.height}, .8f, 10, kAccent);
+
+    if (!actionButtons.empty()) {
+        actionButtons[0].disabled = g->isGameOver() || g->getHasRolledThisTurn();
+    }
 
     for (Button& b : actionButtons) {
         b.draw();
@@ -1020,6 +1217,147 @@ void InGameScene::drawSaveModal(Rectangle sr) {
     saveCancelButton.draw();
 }
 
+void InGameScene::drawDiceModal(Rectangle sr) {
+    if (diceModalVis <= .01f || !showDiceModal) return;
+
+    DrawRectangle(
+        0,
+        0,
+        GetScreenWidth(),
+        GetScreenHeight(),
+        Fade(kText, .38f * diceModalVis)
+    );
+
+    Rectangle p{
+        sr.width * .5f - 280,
+        sr.height * .5f - 170 + (1 - diceModalVis) * 24,
+        560,
+        340
+    };
+
+    DrawRectangleRounded(
+        {p.x + 5, p.y + 9, p.width, p.height},
+        .09f,
+        10,
+        Fade(kText, .12f * diceModalVis)
+    );
+
+    DrawRectangleRounded(
+        p,
+        .09f,
+        10,
+        Fade({250,255,235,255}, diceModalVis)
+    );
+
+    DrawRectangleRoundedLinesEx(
+        p,
+        .09f,
+        10,
+        2.5f,
+        Fade(kPanelBorder, diceModalVis)
+    );
+
+    drawSmallFlower(p.x + p.width - 28, p.y + 28, 14, sceneTime * .5f, .5f * diceModalVis);
+
+    DrawText(
+        diceManualMode ? "Atur Dadu" : "Dadu",
+        static_cast<int>(p.x + 24),
+        static_cast<int>(p.y + 24),
+        32,
+        kText
+    );
+
+    if (diceManualMode) {
+        DrawText(
+            "Masukkan nilai masing-masing dadu.",
+            static_cast<int>(p.x + 24),
+            static_cast<int>(p.y + 78),
+            20,
+            kSubtext
+        );
+
+        DrawText("Dadu 1", static_cast<int>(p.x + 80), static_cast<int>(p.y + 106), 18, kText);
+        DrawText("Dadu 2", static_cast<int>(p.x + p.width - 230), static_cast<int>(p.y + 106), 18, kText);
+
+        diceOneField.setBoundary({
+            p.x + 80,
+            p.y + 132,
+            150,
+            52
+        });
+
+        diceTwoField.setBoundary({
+            p.x + p.width - 230,
+            p.y + 132,
+            150,
+            52
+        });
+
+        diceOneField.draw();
+        diceTwoField.draw();
+
+        if (!diceError.empty()) {
+            DrawText(
+                diceError.c_str(),
+                static_cast<int>(p.x + 24),
+                static_cast<int>(p.y + 208),
+                18,
+                kDanger
+            );
+        }
+
+        diceManualConfirmButton.setBoundary({
+            p.x + p.width - 204,
+            p.y + p.height - 72,
+            156,
+            50
+        });
+
+        diceBackButton.setBoundary({
+            p.x + 48,
+            p.y + p.height - 72,
+            140,
+            50
+        });
+
+        diceManualConfirmButton.draw();
+        diceBackButton.draw();
+    } else {
+        DrawText(
+            "Pilih cara menentukan hasil dadu.",
+            static_cast<int>(p.x + 24),
+            static_cast<int>(p.y + 78),
+            20,
+            kSubtext
+        );
+
+        diceRollButton.setBoundary({
+            p.x + 48,
+            p.y + 128,
+            p.width - 96,
+            52
+        });
+
+        diceManualButton.setBoundary({
+            p.x + 48,
+            p.y + 196,
+            p.width - 96,
+            52
+        });
+
+        diceCancelButton.setBoundary({
+            p.x + p.width - 188,
+            p.y + p.height - 72,
+            140,
+            50
+        });
+
+        diceRollButton.draw();
+        diceManualButton.draw();
+        diceCancelButton.draw();
+    }
+}
+
 void InGameScene::draw() {
     Rectangle sr{
         0,
@@ -1039,4 +1377,5 @@ void InGameScene::draw() {
     drawSidebar(sb);
     drawOverlay(sr);
     drawSaveModal(sr);
+    drawDiceModal(sr);
 }
