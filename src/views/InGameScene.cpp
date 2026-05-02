@@ -115,6 +115,138 @@ namespace {
 
         return result.empty() ? suffix : result + suffix;
     }
+
+    std::string formatMoney(int amount) {
+        std::string digits = std::to_string(amount);
+        std::string formatted;
+        int count = 0;
+
+        for (auto it = digits.rbegin(); it != digits.rend(); ++it) {
+            if (count == 3) {
+                formatted.push_back('.');
+                count = 0;
+            }
+
+            formatted.push_back(*it);
+            ++count;
+        }
+
+        std::reverse(formatted.begin(), formatted.end());
+        return "M" + formatted;
+    }
+
+    std::string displayName(std::string value) {
+        for (char& c : value) {
+            if (c == '_') {
+                c = ' ';
+            }
+        }
+
+        return value;
+    }
+
+    std::string propertyStatusLine(const PropertyTile* property) {
+        if (property == nullptr) {
+            return "Status : -";
+        }
+
+        std::string status = "BANK";
+        if (property->isMortgaged()) {
+            status = "MORTGAGED";
+        } else if (property->isOwned()) {
+            status = "OWNED";
+        }
+
+        if (property->getOwner() != nullptr) {
+            status += " (" + property->getOwner()->getUsername() + ")";
+        }
+
+        return "Status : " + status;
+    }
+
+    std::vector<std::string> buildPropertyInfoLines(PropertyTile* property) {
+        if (property == nullptr) {
+            return {};
+        }
+
+        std::vector<std::string> lines;
+        const std::string separator = "------------------------------";
+
+        StreetTile* street = dynamic_cast<StreetTile*>(property);
+        RailroadTile* railroad = dynamic_cast<RailroadTile*>(property);
+        UtilityTile* utility = dynamic_cast<UtilityTile*>(property);
+
+        if (street != nullptr) {
+            const std::vector<int>& rents = street->getRentTable();
+            const std::string color = displayName(street->getColorGroup());
+
+            lines.push_back("[" + color + "] " + displayName(street->getName()) + " (" + street->getCode() + ")");
+            lines.push_back(separator);
+            lines.push_back("Harga Beli : " + formatMoney(street->getLandPrice()));
+            lines.push_back("Nilai Gadai : " + formatMoney(street->getMortgageValue()));
+            lines.push_back(separator);
+
+            if (rents.size() >= 6U) {
+                lines.push_back("Sewa (unimproved) : " + formatMoney(rents[0]));
+                lines.push_back("Sewa (1 rumah) : " + formatMoney(rents[1]));
+                lines.push_back("Sewa (2 rumah) : " + formatMoney(rents[2]));
+                lines.push_back("Sewa (3 rumah) : " + formatMoney(rents[3]));
+                lines.push_back("Sewa (4 rumah) : " + formatMoney(rents[4]));
+                lines.push_back("Sewa (hotel) : " + formatMoney(rents[5]));
+            } else {
+                lines.push_back("Sewa : data tidak tersedia");
+            }
+
+            lines.push_back(separator);
+            lines.push_back("Harga Rumah : " + formatMoney(street->getHouseBuildCost()));
+            lines.push_back("Harga Hotel : " + formatMoney(street->getHotelBuildCost()));
+            lines.push_back(separator);
+            lines.push_back("Jumlah Rumah : " + std::to_string(street->getHouseCount()));
+            lines.push_back("Jumlah Hotel : " + std::to_string(street->hasHotelBuilt() ? 1 : 0));
+        } else if (railroad != nullptr) {
+            lines.push_back("[RAILROAD] " + displayName(railroad->getName()) + " (" + railroad->getCode() + ")");
+            lines.push_back(separator);
+            lines.push_back("Harga Beli : " + formatMoney(railroad->getLandPrice()));
+            lines.push_back("Nilai Gadai : " + formatMoney(railroad->getMortgageValue()));
+            lines.push_back(separator);
+
+            for (const auto& entry : railroad->getRentTable()) {
+                lines.push_back(
+                    "Sewa (" + std::to_string(entry.first) + " railroad) : " +
+                    formatMoney(entry.second)
+                );
+            }
+        } else if (utility != nullptr) {
+            lines.push_back("[UTILITY] " + displayName(utility->getName()) + " (" + utility->getCode() + ")");
+            lines.push_back(separator);
+            lines.push_back("Harga Beli : " + formatMoney(utility->getLandPrice()));
+            lines.push_back("Nilai Gadai : " + formatMoney(utility->getMortgageValue()));
+            lines.push_back(separator);
+
+            for (const auto& entry : utility->getMultiplierTable()) {
+                lines.push_back(
+                    "Faktor Sewa (" + std::to_string(entry.first) + " utility) : x" +
+                    std::to_string(entry.second) + " dadu"
+                );
+            }
+        } else {
+            lines.push_back(displayName(property->getName()) + " (" + property->getCode() + ")");
+            lines.push_back("Harga Beli : " + formatMoney(property->getLandPrice()));
+            lines.push_back("Nilai Gadai : " + formatMoney(property->getMortgageValue()));
+        }
+
+        lines.push_back(separator);
+        lines.push_back(propertyStatusLine(property));
+
+        if (property->getFestivalMultiplier() > 1) {
+            lines.push_back(
+                "Festival : x" + std::to_string(property->getFestivalMultiplier()) +
+                " (" + std::to_string(property->getFestivalDuration()) + " giliran)"
+            );
+        }
+
+        return lines;
+    }
 }
 
 InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
@@ -276,39 +408,20 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             Tile* t = g->getBoard().getTileByIndex(selectedTile);
             if (t == nullptr) return;
 
-            std::vector<std::string> lines = {
-                "Kode: " + t->getCode(),
-                "Nama: " + t->getName()
-            };
-
             PropertyTile* pt = dynamic_cast<PropertyTile*>(t);
             if (pt != nullptr) {
-                lines.push_back("Harga: M" + std::to_string(pt->getLandPrice()));
-                lines.push_back("Pemilik: " + std::string(pt->getOwner() ? pt->getOwner()->getUsername() : "BANK"));
-                lines.push_back("Status: " + std::string(
-                    pt->isMortgaged() ? "DIGADAIKAN" :
-                    pt->isOwned() ? "DIMILIKI" :
-                    "BANK"
-                ));
-
-                StreetTile* st = dynamic_cast<StreetTile*>(pt);
-                if (st != nullptr) {
-                    lines.push_back("Grup: " + st->getColorGroup());
-                    lines.push_back(
-                        "Rumah: " + std::to_string(st->getHouseCount()) +
-                        (st->hasHotelBuilt() ? " (Hotel)" : "")
-                    );
-
-                    if (pt->getFestivalMultiplier() > 1) {
-                        lines.push_back(
-                            "Festival x" + std::to_string(pt->getFestivalMultiplier()) +
-                            " (" + std::to_string(pt->getFestivalDuration()) + " giliran)"
-                        );
-                    }
-                }
+                showOverlay("AKTA KEPEMILIKAN", buildPropertyInfoLines(pt), "Klik X untuk menutup.");
+                return;
             }
 
-            showOverlay(t->getName(), lines, "Klik X untuk menutup.");
+            showOverlay(
+                displayName(t->getName()),
+                {
+                    "Kode : " + t->getCode(),
+                    "Nama : " + displayName(t->getName())
+                },
+                "Klik X untuk menutup."
+            );
         }},
 
         {"Properti", [this]() {
@@ -791,9 +904,16 @@ void InGameScene::update(){
     }
 
     if (overlayVis > .01f) {
+        Rectangle p{
+            sr.width * .5f - 330,
+            sr.height * .5f - 292 + (1 - overlayVis) * 24,
+            660,
+            584
+        };
+
         closeOverlayBtn.setBoundary({
-            sr.width * .5f + 268,
-            sr.height * .5f - 240,
+            p.x + p.width - 62,
+            p.y + 12,
             50,
             38
         });
@@ -1128,10 +1248,10 @@ void InGameScene::drawOverlay(Rectangle sr) {
 
     float rise = (1 - overlayVis) * 24;
     Rectangle p{
-        sr.width * .5f - 310,
-        sr.height * .5f - 252 + rise,
-        620,
-        504
+        sr.width * .5f - 330,
+        sr.height * .5f - 292 + rise,
+        660,
+        584
     };
 
     DrawRectangleRounded({p.x + 5, p.y + 9, p.width, p.height}, .09f, 10, Fade(kText, .12f * overlayVis));
@@ -1140,15 +1260,18 @@ void InGameScene::drawOverlay(Rectangle sr) {
 
     drawSmallFlower(p.x + p.width - 28, p.y + 28, 14, sceneTime * .5f, .5f * overlayVis);
 
-    DrawText(overlayTitle.c_str(), int(p.x + 22), int(p.y + 20), 32, kText);
+    DrawText(fitText(overlayTitle, 32, static_cast<int>(p.width - 100)).c_str(), int(p.x + 22), int(p.y + 20), 32, kText);
 
     closeOverlayBtn.draw();
 
     float y = p.y + 80;
+    int fontSize = overlayLines.size() > 14U ? 17 : 20;
+    float lineStep = overlayLines.size() > 14U ? 24.0f : 32.0f;
+    int maxTextWidth = static_cast<int>(p.width - 48);
 
     for (const auto& line : overlayLines) {
-        DrawText(line.c_str(), int(p.x + 24), int(y), 20, kSubtext);
-        y += 32;
+        DrawText(fitText(line, fontSize, maxTextWidth).c_str(), int(p.x + 24), int(y), fontSize, kSubtext);
+        y += lineStep;
 
         if (y > p.y + p.height - 70) break;
     }
