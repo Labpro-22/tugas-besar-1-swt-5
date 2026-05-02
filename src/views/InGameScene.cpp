@@ -247,6 +247,36 @@ namespace {
 
         return lines;
     }
+
+    std::vector<std::string> buildAuctionResultLines(AuctionManager& auction) {
+        PropertyTile* property = auction.getLastProperty();
+        Player* winner = auction.getLastWinner();
+
+        std::vector<std::string> lines;
+        if (property != nullptr) {
+            lines.push_back(
+                "Properti: " + displayName(property->getName()) + " (" + property->getCode() + ")"
+            );
+        }
+
+        lines.push_back("Lelang selesai!");
+
+        if (auction.getLastAuctionHadWinner() && winner != nullptr) {
+            lines.push_back("Pemenang: " + winner->getUsername());
+            lines.push_back("Harga akhir: " + formatMoney(auction.getLastWinningBid()));
+            if (property != nullptr) {
+                lines.push_back(
+                    "Properti " + displayName(property->getName()) + " kini dimiliki " +
+                    winner->getUsername() + "."
+                );
+            }
+        } else {
+            lines.push_back("Tidak ada pemenang.");
+            lines.push_back("Properti tetap dimiliki Bank.");
+        }
+
+        return lines;
+    }
 }
 
 InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
@@ -262,9 +292,13 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
       diceCancelButton("Batal", kDanger, {255,255,255,255}),
       openLogButton("Buka Log", kAccentAlt, {255,255,255,255}),
       closeLogButton("X", kDanger, {255,255,255,255}),
+      auctionBidButton("Bid", kAccentAlt, {255,255,255,255}),
+      auctionPassButton("Pass", kDanger, {255,255,255,255}),
+      auctionCloseButton("Tutup", kAccentAlt, {255,255,255,255}),
       savePathField("data/save.txt"),
       diceOneField("1-6"),
       diceTwoField("1-6"),
+      auctionBidField("Jumlah bid"),
       sceneTime(0),
       selectedTile(0),
       overlayOpen(false),
@@ -275,7 +309,13 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
       diceManualMode(false),
       diceModalVis(0),
       showLogModal(false),
-      logModalVis(0) {
+      logModalVis(0),
+      propertyDecisionPending(false),
+      propertyDecisionResolved(false),
+      pendingProperty(nullptr),
+      showAuctionModal(false),
+      auctionNoticeMode(false),
+      auctionModalVis(0) {
 
     auto selectedPropertyCode = [this](Game* g, std::string& code) -> bool {
         if (g == nullptr || g->getBoard().size() == 0) {
@@ -323,7 +363,27 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             Game* g = gameManager->getCurrentGame();
             if (g == nullptr || g->isGameOver()) return;
 
+            refreshPropertyDecisionState();
+            if (!propertyDecisionPending || pendingProperty == nullptr) {
+                showOverlay("Pembelian Gagal", {"Tidak ada properti bank yang wajib dipilih saat ini."});
+                return;
+            }
+
+            int idx = g->getTurnManager().getCurrentPlayerIndex();
+            if (idx < 0 || idx >= static_cast<int>(g->getPlayers().size())) return;
+            Player& current = g->getPlayer(idx);
+
+            if (!current.canAfford(pendingProperty->getLandPrice())) {
+                startAuctionForProperty(pendingProperty, "Uang pemain tidak cukup untuk membeli properti.");
+                return;
+            }
+
             bool ok = g->buyCurrentProperty();
+            if (ok) {
+                propertyDecisionPending = false;
+                propertyDecisionResolved = true;
+                pendingProperty = nullptr;
+            }
 
             showOverlay(
                 ok ? "Pembelian Berhasil" : "Pembelian Gagal",
@@ -506,27 +566,20 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             Game* g = gameManager->getCurrentGame();
             if (g == nullptr) return;
 
-            if (!g->getAuctionManager().isAuctionActive()) {
-                showOverlay(
-                    "Lelang",
-                    {
-                        "Tidak ada lelang aktif.",
-                        "Lelang biasanya dimulai ketika pemain menolak membeli properti bank."
-                    }
-                );
+            refreshPropertyDecisionState();
+            if (propertyDecisionPending && pendingProperty != nullptr) {
+                startAuctionForProperty(pendingProperty, "Pemain memilih melelang properti.");
                 return;
             }
 
-            Player* bidder = g->getAuctionManager().getCurrentTurnPlayer();
+            if (g->getAuctionManager().isAuctionActive()) {
+                showAuctionModal = true;
+                auctionNoticeMode = false;
+                overlayOpen = false;
+                return;
+            }
 
-            showOverlay(
-                "Lelang Aktif",
-                {
-                    "Giliran: " + std::string(bidder ? bidder->getUsername() : "?"),
-                    "Bid tertinggi: M" + std::to_string(g->getAuctionManager().getHighestBid()),
-                    "Gunakan fitur/command tawar sesuai AuctionManager."
-                }
-            );
+            showOverlay("Lelang", {"Tidak ada properti bank yang sedang menunggu keputusan lelang."});
         }},
 
         {"Simpan", [this]() {
@@ -543,7 +596,28 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             Game* g = gameManager->getCurrentGame();
             if (g == nullptr || g->isGameOver()) return;
 
+            refreshPropertyDecisionState();
+            if (g->getAuctionManager().isAuctionActive() || showAuctionModal) {
+                showAuctionModal = true;
+                overlayOpen = false;
+                return;
+            }
+
+            if (hasBlockingPropertyDecision()) {
+                showOverlay(
+                    "Pilih Aksi Properti",
+                    {
+                        "Properti " + displayName(pendingProperty->getName()) + " (" + pendingProperty->getCode() + ") belum diproses.",
+                        "Pilih Beli atau Lelang sebelum mengakhiri giliran."
+                    }
+                );
+                return;
+            }
+
             g->endTurn();
+            propertyDecisionPending = false;
+            propertyDecisionResolved = false;
+            pendingProperty = nullptr;
 
             showOverlay(
                 "Giliran Selesai",
@@ -609,6 +683,7 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
     savePathField.setContent("data/save.txt");
     diceOneField.setMaxLength(2);
     diceTwoField.setMaxLength(2);
+    auctionBidField.setMaxLength(12);
 
     diceRollButton.setOnClick([this]() {
         showDiceModal = false;
@@ -647,6 +722,18 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
         showLogModal = false;
     });
 
+    auctionBidButton.setOnClick([this]() {
+        onAuctionBid();
+    });
+
+    auctionPassButton.setOnClick([this]() {
+        onAuctionPass();
+    });
+
+    auctionCloseButton.setOnClick([this]() {
+        finishAuctionNotice();
+    });
+
     backToMenuBtn.setOnClick([this]() {
         sceneManager->setScene(SceneType::MainMenu);
     });
@@ -666,6 +753,15 @@ void InGameScene::onEnter() {
     diceError.clear();
     showLogModal = false;
     logModalVis = 0;
+    propertyDecisionPending = false;
+    propertyDecisionResolved = false;
+    pendingProperty = nullptr;
+    showAuctionModal = false;
+    auctionNoticeMode = false;
+    auctionError.clear();
+    auctionNoticeLines.clear();
+    auctionModalVis = 0;
+    auctionBidField.setContent("");
 
     tokenPos.clear();
     tokenPhase.clear();
@@ -685,6 +781,29 @@ void InGameScene::rollDiceAndShowResult() {
 
     if (result.first == 0 && result.second == 0) {
         showOverlay("Dadu", {"Dadu tidak bisa dilempar saat ini."});
+        return;
+    }
+
+    propertyDecisionResolved = false;
+    refreshPropertyDecisionState();
+
+    if (propertyDecisionPending && pendingProperty != nullptr) {
+        int idx = g->getTurnManager().getCurrentPlayerIndex();
+        if (idx >= 0 && idx < static_cast<int>(g->getPlayers().size()) &&
+            !g->getPlayer(idx).canAfford(pendingProperty->getLandPrice())) {
+            startAuctionForProperty(pendingProperty, "Uang pemain tidak cukup untuk membeli properti.");
+            return;
+        }
+
+        showOverlay(
+            "Properti Tersedia",
+            {
+                "Hasil dadu: " + std::to_string(result.first) + " + " + std::to_string(result.second),
+                displayName(pendingProperty->getName()) + " (" + pendingProperty->getCode() + ") belum dimiliki.",
+                "Harga beli: " + formatMoney(pendingProperty->getLandPrice()),
+                "Pilih Beli atau Lelang sebelum mengakhiri giliran."
+            }
+        );
         return;
     }
 
@@ -737,6 +856,204 @@ void InGameScene::onManualDiceSubmit() {
     diceManualMode = false;
     diceError.clear();
     rollDiceAndShowResult();
+}
+
+void InGameScene::refreshPropertyDecisionState() {
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr || g->isGameOver() || g->getAuctionManager().isAuctionActive()) {
+        return;
+    }
+
+    if (!g->getHasRolledThisTurn()) {
+        propertyDecisionPending = false;
+        propertyDecisionResolved = false;
+        pendingProperty = nullptr;
+        return;
+    }
+
+    if (propertyDecisionPending) {
+        if (pendingProperty == nullptr || pendingProperty->getStatus() != BANK) {
+            propertyDecisionPending = false;
+            propertyDecisionResolved = true;
+            pendingProperty = nullptr;
+        }
+        return;
+    }
+
+    if (propertyDecisionResolved || g->getBoard().size() == 0) {
+        return;
+    }
+
+    int idx = g->getTurnManager().getCurrentPlayerIndex();
+    if (idx < 0 || idx >= static_cast<int>(g->getPlayers().size())) {
+        return;
+    }
+
+    PropertyTile* property = dynamic_cast<PropertyTile*>(
+        g->getBoard().getTileByIndex(g->getPlayer(idx).getPosition())
+    );
+
+    if (property != nullptr && property->getStatus() == BANK) {
+        propertyDecisionPending = true;
+        pendingProperty = property;
+    }
+}
+
+bool InGameScene::hasBlockingPropertyDecision() const {
+    return propertyDecisionPending && pendingProperty != nullptr &&
+           pendingProperty->getStatus() == BANK;
+}
+
+void InGameScene::startAuctionForProperty(PropertyTile* property, const std::string& reason) {
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr || property == nullptr || property->getStatus() != BANK) {
+        return;
+    }
+
+    int idx = g->getTurnManager().getCurrentPlayerIndex();
+    if (idx < 0 || idx >= static_cast<int>(g->getPlayers().size())) {
+        return;
+    }
+
+    std::vector<Player*> bidders;
+    for (Player& player : g->getPlayers()) {
+        if (!player.isBankrupt() && player.canAfford(0)) {
+            bidders.push_back(&player);
+        }
+    }
+
+    g->getAuctionManager().runAuction(*property, bidders, g->getPlayer(idx), *g);
+    propertyDecisionPending = false;
+    propertyDecisionResolved = true;
+    pendingProperty = nullptr;
+    overlayOpen = false;
+    auctionError.clear();
+    auctionBidField.setContent("");
+    showAuctionModal = true;
+
+    if (!g->getAuctionManager().isAuctionActive()) {
+        auctionNoticeMode = true;
+        auctionNoticeLines = buildAuctionResultLines(g->getAuctionManager());
+        if (!reason.empty()) {
+            auctionNoticeLines.insert(auctionNoticeLines.begin(), reason);
+        }
+        return;
+    }
+
+    auctionNoticeMode = false;
+    auctionNoticeLines.clear();
+}
+
+void InGameScene::onAuctionBid() {
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr) return;
+
+    AuctionManager& auction = g->getAuctionManager();
+    if (!auction.isAuctionActive()) {
+        return;
+    }
+
+    std::string text = trimCopy(auctionBidField.getContent());
+    if (text.empty()) {
+        auctionError = "Masukkan jumlah bid.";
+        return;
+    }
+
+    for (char c : text) {
+        if (!std::isdigit(static_cast<unsigned char>(c))) {
+            auctionError = "Bid harus berupa angka.";
+            return;
+        }
+    }
+
+    int amount = 0;
+    try {
+        amount = std::stoi(text);
+    } catch (const std::exception&) {
+        auctionError = "Jumlah bid tidak valid.";
+        return;
+    }
+
+    Player* bidder = auction.getCurrentTurnPlayer();
+    if (bidder == nullptr) {
+        auctionError = "Tidak ada pemain yang sedang mendapat giliran.";
+        return;
+    }
+
+    if (amount < auction.getMinimumBid()) {
+        auctionError = "Bid minimal " + formatMoney(auction.getMinimumBid()) + ".";
+        return;
+    }
+
+    if (!bidder->canAfford(amount)) {
+        auctionError = bidder->getUsername() + " tidak memiliki uang cukup.";
+        return;
+    }
+
+    if (!auction.processAction("BID", amount)) {
+        auctionError = "Bid tidak valid.";
+        return;
+    }
+
+    g->getLogger().log(
+        g->getTurnManager().getCurrentTurn(),
+        bidder->getUsername(),
+        "LELANG_BID",
+        formatMoney(amount)
+    );
+
+    auctionError.clear();
+    auctionBidField.setContent("");
+
+    if (!auction.isAuctionActive()) {
+        auctionNoticeMode = true;
+        auctionNoticeLines = buildAuctionResultLines(auction);
+    }
+}
+
+void InGameScene::onAuctionPass() {
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr) return;
+
+    AuctionManager& auction = g->getAuctionManager();
+    if (!auction.isAuctionActive()) {
+        return;
+    }
+
+    Player* bidder = auction.getCurrentTurnPlayer();
+    std::string bidderName = bidder != nullptr ? bidder->getUsername() : "Unknown";
+
+    if (!auction.processAction("PASS")) {
+        auctionError = "PASS tidak valid.";
+        return;
+    }
+
+    g->getLogger().log(
+        g->getTurnManager().getCurrentTurn(),
+        bidderName,
+        "LELANG_PASS",
+        "Pass"
+    );
+
+    auctionError.clear();
+    auctionBidField.setContent("");
+
+    if (!auction.isAuctionActive()) {
+        auctionNoticeMode = true;
+        auctionNoticeLines = buildAuctionResultLines(auction);
+    }
+}
+
+void InGameScene::finishAuctionNotice() {
+    if (!auctionNoticeMode) {
+        return;
+    }
+
+    showAuctionModal = false;
+    auctionNoticeMode = false;
+    auctionError.clear();
+    auctionNoticeLines.clear();
+    auctionBidField.setContent("");
 }
 
 void InGameScene::onSaveGame() {
@@ -808,6 +1125,7 @@ void InGameScene::updateAnimations(const Rectangle& br){
     saveModalVis = ease(saveModalVis, showSaveModal ? 1.f : 0.f, dt * 8);
     diceModalVis = ease(diceModalVis, showDiceModal ? 1.f : 0.f, dt * 8);
     logModalVis = ease(logModalVis, showLogModal ? 1.f : 0.f, dt * 8);
+    auctionModalVis = ease(auctionModalVis, showAuctionModal ? 1.f : 0.f, dt * 8);
 }
 
 void InGameScene::update(){
@@ -820,6 +1138,11 @@ void InGameScene::update(){
     for(int i=0;i<tileCount;++i) tileRects.push_back(getTileRect(br,i));
     updateAnimations(br);
     if (IsKeyPressed(KEY_ESCAPE)) {
+        if (showAuctionModal && auctionNoticeMode) {
+            finishAuctionNotice();
+            return;
+        }
+
         if (showLogModal) {
             showLogModal = false;
             return;
@@ -846,7 +1169,10 @@ void InGameScene::update(){
         }
     }
 
-    if (saveModalVis < .02f && diceModalVis < .02f && logModalVis < .02f && overlayVis < .02f && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+    bool noModalActive = saveModalVis < .02f && diceModalVis < .02f && logModalVis < .02f &&
+                         auctionModalVis < .02f && overlayVis < .02f;
+
+    if (noModalActive && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
         Vector2 m = GetMousePosition();
 
         for (size_t i = 0; i < tileRects.size(); ++i) {
@@ -859,7 +1185,7 @@ void InGameScene::update(){
 
     backToMenuBtn.setBoundary({sr.width - 130, 22, 106, 42});
 
-    if (saveModalVis < .02f && diceModalVis < .02f && logModalVis < .02f && overlayVis < .02f) {
+    if (noModalActive) {
         backToMenuBtn.update();
     }
 
@@ -887,7 +1213,7 @@ void InGameScene::update(){
             bh
         });
 
-        if (saveModalVis < .02f && diceModalVis < .02f && logModalVis < .02f && overlayVis < .02f) {
+        if (noModalActive) {
             actionButtons[i].update();
         }
     }
@@ -899,7 +1225,7 @@ void InGameScene::update(){
         46
     });
 
-    if (saveModalVis < .02f && diceModalVis < .02f && logModalVis < .02f && overlayVis < .02f) {
+    if (noModalActive) {
         openLogButton.update();
     }
 
@@ -1040,6 +1366,54 @@ void InGameScene::update(){
         });
 
         closeLogButton.update();
+    }
+
+    if (auctionModalVis > .01f) {
+        Rectangle p{
+            sr.width * .5f - 330,
+            sr.height * .5f - 246 + (1 - auctionModalVis) * 24,
+            660,
+            492
+        };
+
+        if (auctionNoticeMode) {
+            auctionCloseButton.setBoundary({
+                p.x + p.width - 188,
+                p.y + p.height - 70,
+                140,
+                50
+            });
+            auctionCloseButton.update();
+        } else {
+            Game* currentGame = gameManager->getCurrentGame();
+            if (currentGame != nullptr) {
+                auctionBidButton.disabled = !currentGame->getAuctionManager().currentPlayerCanBid();
+                auctionPassButton.disabled = !currentGame->getAuctionManager().currentPlayerCanPass();
+            }
+
+            auctionBidField.setBoundary({
+                p.x + 24,
+                p.y + p.height - 130,
+                p.width - 220,
+                48
+            });
+            auctionBidButton.setBoundary({
+                p.x + p.width - 176,
+                p.y + p.height - 130,
+                152,
+                48
+            });
+            auctionPassButton.setBoundary({
+                p.x + p.width - 176,
+                p.y + p.height - 72,
+                152,
+                48
+            });
+
+            auctionBidField.update();
+            auctionBidButton.update();
+            auctionPassButton.update();
+        }
     }
 }
 
@@ -1637,6 +2011,153 @@ void InGameScene::drawLogModal(Rectangle sr) {
     }
 }
 
+void InGameScene::drawAuctionModal(Rectangle sr) {
+    if (auctionModalVis <= .01f || !showAuctionModal) return;
+
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr) return;
+
+    AuctionManager& auction = g->getAuctionManager();
+
+    DrawRectangle(
+        0,
+        0,
+        GetScreenWidth(),
+        GetScreenHeight(),
+        Fade(kText, .38f * auctionModalVis)
+    );
+
+    Rectangle p{
+        sr.width * .5f - 330,
+        sr.height * .5f - 246 + (1 - auctionModalVis) * 24,
+        660,
+        492
+    };
+
+    DrawRectangleRounded({p.x + 5, p.y + 9, p.width, p.height}, .09f, 10, Fade(kText, .12f * auctionModalVis));
+    DrawRectangleRounded(p, .09f, 10, Fade({250,255,235,255}, auctionModalVis));
+    DrawRectangleRoundedLinesEx(p, .09f, 10, 2.5f, Fade(kPanelBorder, auctionModalVis));
+    drawSmallFlower(p.x + p.width - 28, p.y + 28, 14, sceneTime * .5f, .5f * auctionModalVis);
+
+    DrawText("Lelang Properti", static_cast<int>(p.x + 24), static_cast<int>(p.y + 24), 32, kText);
+
+    if (auctionNoticeMode) {
+        float y = p.y + 88;
+        for (const std::string& line : auctionNoticeLines) {
+            DrawText(
+                fitText(line, 20, static_cast<int>(p.width - 48)).c_str(),
+                static_cast<int>(p.x + 24),
+                static_cast<int>(y),
+                20,
+                kSubtext
+            );
+            y += 34;
+        }
+
+        auctionCloseButton.setBoundary({
+            p.x + p.width - 188,
+            p.y + p.height - 70,
+            140,
+            50
+        });
+        auctionCloseButton.draw();
+        return;
+    }
+
+    PropertyTile* property = auction.getCurrentProperty();
+    Player* current = auction.getCurrentTurnPlayer();
+    Player* highest = auction.getHighestBidder();
+
+    std::string propertyLine = property != nullptr
+        ? displayName(property->getName()) + " (" + property->getCode() + ") akan dilelang."
+        : "Properti akan dilelang.";
+
+    DrawText(
+        fitText(propertyLine, 20, static_cast<int>(p.width - 48)).c_str(),
+        static_cast<int>(p.x + 24),
+        static_cast<int>(p.y + 82),
+        20,
+        kText
+    );
+
+    DrawText(
+        ("Giliran: " + std::string(current != nullptr ? current->getUsername() : "-")).c_str(),
+        static_cast<int>(p.x + 24),
+        static_cast<int>(p.y + 124),
+        24,
+        kText
+    );
+
+    std::string highestLine = "Penawaran tertinggi: ";
+    if (highest != nullptr) {
+        highestLine += formatMoney(auction.getHighestBid()) + " (" + highest->getUsername() + ")";
+    } else {
+        highestLine += "Belum ada";
+    }
+
+    DrawText(highestLine.c_str(), static_cast<int>(p.x + 24), static_cast<int>(p.y + 164), 20, kSubtext);
+    DrawText(
+        ("Peserta aktif: " + std::to_string(auction.getActiveBidderCount())).c_str(),
+        static_cast<int>(p.x + 24),
+        static_cast<int>(p.y + 194),
+        20,
+        kSubtext
+    );
+
+    std::string ruleLine = "Bid minimal " + formatMoney(auction.getMinimumBid()) + ".";
+    if (current != nullptr) {
+        ruleLine += " Saldo " + current->getUsername() + ": " + formatMoney(current->getMoney()) + ".";
+    }
+
+    if (!auction.currentPlayerCanPass()) {
+        ruleLine += " PASS tidak tersedia karena belum ada bid dan hanya pemain ini yang tersisa.";
+    }
+
+    DrawText(
+        fitText(ruleLine, 18, static_cast<int>(p.width - 48)).c_str(),
+        static_cast<int>(p.x + 24),
+        static_cast<int>(p.y + 238),
+        18,
+        kSubtext
+    );
+
+    if (!auctionError.empty()) {
+        DrawText(
+            fitText(auctionError, 18, static_cast<int>(p.width - 48)).c_str(),
+            static_cast<int>(p.x + 24),
+            static_cast<int>(p.y + 274),
+            18,
+            kDanger
+        );
+    }
+
+    auctionBidField.setBoundary({
+        p.x + 24,
+        p.y + p.height - 130,
+        p.width - 220,
+        48
+    });
+    auctionBidField.draw();
+
+    auctionBidButton.disabled = !auction.currentPlayerCanBid();
+    auctionBidButton.setBoundary({
+        p.x + p.width - 176,
+        p.y + p.height - 130,
+        152,
+        48
+    });
+    auctionBidButton.draw();
+
+    auctionPassButton.disabled = !auction.currentPlayerCanPass();
+    auctionPassButton.setBoundary({
+        p.x + p.width - 176,
+        p.y + p.height - 72,
+        152,
+        48
+    });
+    auctionPassButton.draw();
+}
+
 void InGameScene::draw() {
     Rectangle sr{
         0,
@@ -1658,4 +2179,5 @@ void InGameScene::draw() {
     drawSaveModal(sr);
     drawDiceModal(sr);
     drawLogModal(sr);
+    drawAuctionModal(sr);
 }
