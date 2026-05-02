@@ -596,6 +596,14 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             Game* g = gameManager->getCurrentGame();
             if (g == nullptr || g->isGameOver()) return;
 
+            if (!g->getHasRolledThisTurn()) {
+                showOverlay(
+                    "Giliran Belum Selesai",
+                    {"Silakan lempar dadu sebelum mengakhiri giliran."}
+                );
+                return;
+            }
+
             refreshPropertyDecisionState();
             if (g->getAuctionManager().isAuctionActive() || showAuctionModal) {
                 showAuctionModal = true;
