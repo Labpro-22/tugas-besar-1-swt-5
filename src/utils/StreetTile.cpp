@@ -1,6 +1,26 @@
 #include "utils/StreetTile.hpp"
+#include "core/Game.hpp"
 #include <algorithm>
 #include <stdexcept>
+#include <vector>
+
+namespace {
+std::vector<const StreetTile*> collectColorGroup(Game* game, const std::string& colorGroup) {
+    std::vector<const StreetTile*> group;
+    if (game == nullptr) {
+        return group;
+    }
+
+    for (Tile* tile : game->getBoard().getTiles()) {
+        const StreetTile* street = dynamic_cast<const StreetTile*>(tile);
+        if (street != nullptr && street->getColorGroup() == colorGroup) {
+            group.push_back(street);
+        }
+    }
+
+    return group;
+}
+}
 
 StreetTile::StreetTile(int id, std::string code, std::string name,
                        std::string colorGroup, int landPrice,
@@ -65,18 +85,15 @@ void StreetTile::demolish() {
 }
 
 bool StreetTile::hasMonopoly(Game* game) {
-    (void) game;
-    return false;
+    return hasMonopoly(collectColorGroup(game, colorGroup));
 }
 
 bool StreetTile::canBuildHouse(Game* game) {
-    (void) game;
-    return owner != nullptr && !isMortgaged() && !hasHotel && houseCount < 4;
+    return canBuildHouse(collectColorGroup(game, colorGroup));
 }
 
 bool StreetTile::canBuildHotel(Game* game) {
-    (void) game;
-    return owner != nullptr && !isMortgaged() && !hasHotel && houseCount == 4;
+    return canBuildHotel(collectColorGroup(game, colorGroup));
 }
 
 bool StreetTile::hasMonopoly(const std::vector<const StreetTile*>& group) const {
@@ -103,7 +120,7 @@ bool StreetTile::canBuildHouse(const std::vector<const StreetTile*>& group) cons
 
     int minHouseCount = houseCount;
     for (const StreetTile* street : group) {
-        if (street == nullptr || street->hasHotelBuilt()) {
+        if (street == nullptr || street->isMortgaged() || street->hasHotelBuilt()) {
             return false;
         }
         minHouseCount = std::min(minHouseCount, street->getHouseCount());
@@ -118,7 +135,10 @@ bool StreetTile::canBuildHotel(const std::vector<const StreetTile*>& group) cons
     }
 
     for (const StreetTile* street : group) {
-        if (street == nullptr || street->hasHotelBuilt() || street->getHouseCount() != 4) {
+        if (street == nullptr || street->isMortgaged()) {
+            return false;
+        }
+        if (!street->hasHotelBuilt() && street->getHouseCount() != 4) {
             return false;
         }
     }
@@ -127,8 +147,7 @@ bool StreetTile::canBuildHotel(const std::vector<const StreetTile*>& group) cons
 }
 
 bool StreetTile::canBeMortgaged(Game* game) const {
-    (void) game;
-    return status == OWNED && getBuildingLevel() == 0;
+    return canBeMortgaged(collectColorGroup(game, colorGroup));
 }
 
 bool StreetTile::canBeMortgaged(const std::vector<const StreetTile*>& group) const {

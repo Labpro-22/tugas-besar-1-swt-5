@@ -248,6 +248,122 @@ namespace {
         return lines;
     }
 
+    std::vector<const StreetTile*> collectStreetGroup(Game* game, const std::string& colorGroup) {
+        std::vector<const StreetTile*> group;
+        if (game == nullptr) {
+            return group;
+        }
+
+        for (Tile* tile : game->getBoard().getTiles()) {
+            const StreetTile* street = dynamic_cast<const StreetTile*>(tile);
+            if (street != nullptr && street->getColorGroup() == colorGroup) {
+                group.push_back(street);
+            }
+        }
+
+        return group;
+    }
+
+    std::string buildingStatusText(const StreetTile* street) {
+        if (street == nullptr) {
+            return "-";
+        }
+
+        if (street->hasHotelBuilt()) {
+            return "Hotel";
+        }
+
+        return std::to_string(street->getHouseCount()) + " rumah";
+    }
+
+    std::vector<std::string> buildGroupStatusLines(Game* game, const std::string& colorGroup) {
+        std::vector<std::string> lines;
+        const std::vector<const StreetTile*> group = collectStreetGroup(game, colorGroup);
+
+        lines.push_back("Color group [" + displayName(colorGroup) + "]:");
+        for (const StreetTile* street : group) {
+            lines.push_back(
+                "- " + displayName(street->getName()) + " (" + street->getCode() + ") : " +
+                buildingStatusText(street)
+            );
+        }
+
+        return lines;
+    }
+
+    std::vector<std::string> buildEligibleBuildLines(Game* game) {
+        std::vector<std::string> lines;
+        if (game == nullptr || game->getBoard().size() == 0) {
+            return lines;
+        }
+
+        const int playerIndex = game->getTurnManager().getCurrentPlayerIndex();
+        if (playerIndex < 0 || playerIndex >= static_cast<int>(game->getPlayers().size())) {
+            return lines;
+        }
+
+        Player& current = game->getPlayer(playerIndex);
+        std::vector<std::string> visitedGroups;
+        int groupNumber = 1;
+
+        lines.push_back("=== Color Group yang Memenuhi Syarat ===");
+
+        for (Tile* tile : game->getBoard().getTiles()) {
+            const StreetTile* street = dynamic_cast<const StreetTile*>(tile);
+            if (street == nullptr) {
+                continue;
+            }
+
+            const std::string colorGroup = street->getColorGroup();
+            if (std::find(visitedGroups.begin(), visitedGroups.end(), colorGroup) != visitedGroups.end()) {
+                continue;
+            }
+            visitedGroups.push_back(colorGroup);
+
+            const std::vector<const StreetTile*> group = collectStreetGroup(game, colorGroup);
+            std::vector<std::string> buildableLines;
+
+            for (const StreetTile* candidate : group) {
+                if (candidate->getOwner() != &current) {
+                    continue;
+                }
+
+                if (candidate->canBuildHouse(group)) {
+                    buildableLines.push_back(
+                        "- " + displayName(candidate->getName()) + " (" + candidate->getCode() + ") : " +
+                        buildingStatusText(candidate) + " (Harga rumah: " +
+                        formatMoney(candidate->getHouseBuildCost()) + ")"
+                    );
+                } else if (candidate->canBuildHotel(group)) {
+                    buildableLines.push_back(
+                        "- " + displayName(candidate->getName()) + " (" + candidate->getCode() + ") : " +
+                        buildingStatusText(candidate) + " (Upgrade hotel: " +
+                        formatMoney(candidate->getHotelBuildCost()) + ")"
+                    );
+                }
+            }
+
+            if (buildableLines.empty()) {
+                continue;
+            }
+
+            lines.push_back(std::to_string(groupNumber) + ". [" + displayName(colorGroup) + "]");
+            lines.insert(lines.end(), buildableLines.begin(), buildableLines.end());
+            ++groupNumber;
+        }
+
+        if (groupNumber == 1) {
+            lines.clear();
+            lines.push_back("Tidak ada color group yang memenuhi syarat untuk dibangun.");
+            lines.push_back("Kamu harus memiliki seluruh petak dalam satu color group.");
+            return lines;
+        }
+
+        lines.push_back("Uang kamu saat ini : " + formatMoney(current.getMoney()));
+        lines.push_back("Pilih petak yang tampil di daftar, lalu tekan Bangun.");
+        return lines;
+    }
+
     std::vector<std::string> buildAuctionResultLines(AuctionManager& auction) {
         PropertyTile* property = auction.getLastProperty();
         Player* winner = auction.getLastWinner();
@@ -445,19 +561,74 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
 
             std::string code;
             if (!selectedPropertyCode(g, code)) {
-                showOverlay("Bangun Gagal", {"Pilih petak street/property terlebih dahulu."});
+                showOverlay("Bangun", buildEligibleBuildLines(g));
                 return;
             }
 
+            Tile* selected = g->getBoard().getTileByIndex(selectedTile);
+            StreetTile* street = dynamic_cast<StreetTile*>(selected);
+            if (street == nullptr) {
+                std::vector<std::string> lines = {
+                    "Pilih petak street/property yang memenuhi syarat untuk dibangun."
+                };
+                const std::vector<std::string> options = buildEligibleBuildLines(g);
+                lines.insert(lines.end(), options.begin(), options.end());
+                showOverlay("Bangun Gagal", lines);
+                return;
+            }
+
+            const std::vector<const StreetTile*> group = collectStreetGroup(g, street->getColorGroup());
+            const bool willBuildHouse = street->canBuildHouse(group);
+            const bool willBuildHotel = street->canBuildHotel(group);
+            if (!willBuildHouse && !willBuildHotel) {
+                std::vector<std::string> lines = {
+                    displayName(street->getName()) + " belum memenuhi syarat bangun.",
+                    "Rumah hanya bisa dibangun jika seluruh color group dimiliki pemain aktif dan jumlah rumah tetap merata.",
+                    "Hotel hanya bisa dibangun jika semua petak dalam color group sudah mencapai 4 rumah atau hotel."
+                };
+                const std::vector<std::string> options = buildEligibleBuildLines(g);
+                lines.insert(lines.end(), options.begin(), options.end());
+                showOverlay("Bangun Gagal", lines);
+                return;
+            }
+
+            int playerIndex = g->getTurnManager().getCurrentPlayerIndex();
+            if (playerIndex < 0 || playerIndex >= static_cast<int>(g->getPlayers().size())) return;
+            Player& current = g->getPlayer(playerIndex);
+            const int cost = willBuildHotel ? street->getHotelBuildCost() : street->getHouseBuildCost();
+            if (!current.canAfford(cost)) {
+                showOverlay(
+                    "Bangun Gagal",
+                    {
+                        "Uang tidak cukup untuk membangun di " + displayName(street->getName()) + ".",
+                        "Biaya: " + formatMoney(cost),
+                        "Uang kamu saat ini: " + formatMoney(current.getMoney())
+                    }
+                );
+                return;
+            }
+
+            const std::string builtName = displayName(street->getName());
+            const std::string colorGroup = street->getColorGroup();
             bool ok = g->buildProperty(code);
+
+            std::vector<std::string> resultLines;
+            if (ok) {
+                resultLines.push_back(
+                    willBuildHotel
+                        ? builtName + " di-upgrade ke Hotel!"
+                        : "Kamu membangun 1 rumah di " + builtName + ". Biaya: " + formatMoney(cost)
+                );
+                resultLines.push_back("Uang tersisa: " + formatMoney(current.getMoney()));
+                const std::vector<std::string> statusLines = buildGroupStatusLines(g, colorGroup);
+                resultLines.insert(resultLines.end(), statusLines.begin(), statusLines.end());
+            } else {
+                resultLines.push_back("Pilih street milik pemain aktif dan pastikan syarat bangun terpenuhi.");
+            }
 
             showOverlay(
                 ok ? "Bangun Berhasil" : "Bangun Gagal",
-                {
-                    ok
-                        ? "Bangunan di " + code + " berhasil ditingkatkan."
-                        : "Pilih street milik pemain aktif dan pastikan syarat bangun terpenuhi."
-                }
+                resultLines
             );
         }},
 
