@@ -8,6 +8,7 @@
 #include "TextField.hpp"
 
 class PropertyTile;
+class TradeToPlayer;
 
 class InGameScene : public Scene {
 public:
@@ -31,10 +32,19 @@ private:
     Button auctionBidButton;
     Button auctionPassButton;
     Button auctionCloseButton;
+    Button tradeSendButton;
+    Button tradeCancelButton;
+    Button tradeAcceptButton;
+    Button tradeRejectButton;
     TextField savePathField;
     TextField diceOneField;
     TextField diceTwoField;
     TextField auctionBidField;
+    TextField tradeTargetField;
+    TextField tradeOfferPropsField;
+    TextField tradeOfferMoneyField;
+    TextField tradeRequestPropsField;
+    TextField tradeRequestMoneyField;
     
     std::vector<Rectangle> tileRects;
     std::vector<Vector2> tokenPos;
@@ -69,6 +79,12 @@ private:
     std::vector<std::string> auctionNoticeLines;
     float auctionModalVis;
 
+    bool showTradeModal;
+    bool tradeResponseMode;
+    std::string tradeError;
+    TradeToPlayer* pendingTrade;
+    float tradeModalVis;
+
     void layoutUi(Rectangle sr, Rectangle& br, Rectangle& sb);
     Rectangle getTileRect(const Rectangle& br, int idx) const;
     Vector2   getTileCenter(const Rectangle& br, int idx) const;
@@ -89,6 +105,7 @@ private:
     void drawDiceModal(Rectangle sr);
     void drawLogModal(Rectangle sr);
     void drawAuctionModal(Rectangle sr);
+    void drawTradeModal(Rectangle sr);
     void onSaveGame();
     void rollDiceAndShowResult();
     void onManualDiceSubmit();
@@ -98,6 +115,10 @@ private:
     void onAuctionBid();
     void onAuctionPass();
     void finishAuctionNotice();
+    void openTradeProposal();
+    void onTradeSubmit();
+    void onTradeAccept();
+    void onTradeReject();
 };
 
 #endif
