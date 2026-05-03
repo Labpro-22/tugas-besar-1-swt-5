@@ -4,6 +4,8 @@
 #include "../../include/core/Game.hpp"
 #include "../../include/models/Player.hpp"
 #include "../../include/models/AbilityCard.hpp"
+#include "../../include/models/TradeToPlayer.hpp"
+#include "../../include/core/TradeManager.hpp"
 #include "../../include/utils/Board.hpp"
 #include "../../include/utils/Tile.hpp"
 #include "../../include/utils/PropertyTile.hpp"
@@ -22,6 +24,7 @@
 #include <vector>
 #include <cctype>
 #include <exception>
+#include <sstream>
 
 enum class PropertyStatusView {
     Bank,
@@ -133,6 +136,149 @@ namespace {
 
         std::reverse(formatted.begin(), formatted.end());
         return "M" + formatted;
+    }
+
+    std::string upperCopy(std::string value) {
+        for (char& c : value) {
+            c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        }
+
+        return value;
+    }
+
+    bool parseMoneyField(const std::string& raw, int& amount, std::string& error, const std::string& label) {
+        std::string value = trimCopy(raw);
+
+        if (value.empty()) {
+            amount = 0;
+            return true;
+        }
+
+        for (char c : value) {
+            if (!std::isdigit(static_cast<unsigned char>(c))) {
+                error = label + " harus berupa angka 0 atau lebih.";
+                return false;
+            }
+        }
+
+        try {
+            long long parsed = std::stoll(value);
+            if (parsed > 2147483647LL) {
+                error = label + " terlalu besar.";
+                return false;
+            }
+
+            amount = static_cast<int>(parsed);
+            return true;
+        } catch (const std::exception&) {
+            error = label + " tidak valid.";
+            return false;
+        }
+    }
+
+    Player* findPlayerByUsername(Game* game, const std::string& rawName) {
+        if (game == nullptr) {
+            return nullptr;
+        }
+
+        const std::string targetName = trimCopy(rawName);
+
+        for (Player& player : game->getPlayers()) {
+            if (player.getUsername() == targetName) {
+                return &player;
+            }
+        }
+
+        return nullptr;
+    }
+
+    PropertyTile* findPropertyByCode(Game* game, const std::string& code) {
+        if (game == nullptr) {
+            return nullptr;
+        }
+
+        const std::string wanted = upperCopy(trimCopy(code));
+        const auto& tiles = game->getBoard().getTiles();
+
+        for (Tile* tile : tiles) {
+            PropertyTile* property = dynamic_cast<PropertyTile*>(tile);
+            if (property != nullptr && upperCopy(property->getCode()) == wanted) {
+                return property;
+            }
+        }
+
+        return nullptr;
+    }
+
+    bool parsePropertyList(Game* game, const std::string& raw, std::vector<PropertyTile*>& props, std::string& error, const std::string& label) {
+        props.clear();
+
+        std::string normalized = raw;
+        for (char& c : normalized) {
+            if (c == ',' || c == ';') {
+                c = ' ';
+            }
+        }
+
+        std::stringstream ss(normalized);
+        std::string token;
+        std::vector<std::string> seenCodes;
+
+        while (ss >> token) {
+            const std::string code = upperCopy(trimCopy(token));
+            if (code.empty()) {
+                continue;
+            }
+
+            if (std::find(seenCodes.begin(), seenCodes.end(), code) != seenCodes.end()) {
+                error = "Properti " + code + " muncul lebih dari sekali di " + label + ".";
+                return false;
+            }
+
+            PropertyTile* property = findPropertyByCode(game, code);
+            if (property == nullptr) {
+                error = "Properti " + code + " pada " + label + " tidak valid.";
+                return false;
+            }
+
+            seenCodes.push_back(code);
+            props.push_back(property);
+        }
+
+        return true;
+    }
+
+    std::string propertyCodesLine(const std::vector<PropertyTile*>& props) {
+        if (props.empty()) {
+            return "-";
+        }
+
+        std::string result;
+        for (std::size_t i = 0; i < props.size(); ++i) {
+            if (i > 0) {
+                result += ", ";
+            }
+
+            result += props[i]->getCode();
+        }
+
+        return result;
+    }
+
+    std::vector<std::string> buildTradeLines(TradeToPlayer* trade) {
+        if (trade == nullptr) {
+            return {"Penawaran trade tidak tersedia."};
+        }
+
+        Player* proposer = trade->getProposer();
+        Player* target = trade->getTarget();
+
+        return {
+            "Dari: " + std::string(proposer != nullptr ? proposer->getUsername() : "-"),
+            "Untuk: " + std::string(target != nullptr ? target->getUsername() : "-"),
+            "Diberikan: " + propertyCodesLine(trade->getOfferedProperties()) + " + " + formatMoney(trade->getOfferedMoney()),
+            "Diminta: " + propertyCodesLine(trade->getRequestedProperties()) + " + " + formatMoney(trade->getRequestedMoney())
+        };
     }
 
     std::vector<std::string> buildRankingLines(Game* game) {
@@ -446,10 +592,19 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
       auctionBidButton("Bid", kAccentAlt, {255,255,255,255}),
       auctionPassButton("Pass", kDanger, {255,255,255,255}),
       auctionCloseButton("Tutup", kAccentAlt, {255,255,255,255}),
+      tradeSendButton("Kirim", kAccentAlt, {255,255,255,255}),
+      tradeCancelButton("Batal", kPanelBorder, kText),
+      tradeAcceptButton("Terima", kAccentAlt, {255,255,255,255}),
+      tradeRejectButton("Tolak", kDanger, {255,255,255,255}),
       savePathField("data/save.txt"),
       diceOneField("1-6"),
       diceTwoField("1-6"),
       auctionBidField("Jumlah bid"),
+      tradeTargetField("Nama player"),
+      tradeOfferPropsField("Kode properti diberikan"),
+      tradeOfferMoneyField("Uang diberikan"),
+      tradeRequestPropsField("Kode properti diminta"),
+      tradeRequestMoneyField("Uang diminta"),
       sceneTime(0),
       selectedTile(0),
       overlayOpen(false),
@@ -466,7 +621,11 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
       pendingProperty(nullptr),
       showAuctionModal(false),
       auctionNoticeMode(false),
-      auctionModalVis(0) {
+      auctionModalVis(0),
+      showTradeModal(false),
+      tradeResponseMode(false),
+      pendingTrade(nullptr),
+      tradeModalVis(0) {
 
     auto selectedPropertyCode = [this](Game* g, std::string& code) -> bool {
         if (g == nullptr || g->getBoard().size() == 0) {
@@ -803,6 +962,10 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             );
         }},
 
+        {"Trade", [this]() {
+            openTradeProposal();
+        }},
+
         {"Lelang", [this]() {
             Game* g = gameManager->getCurrentGame();
             if (g == nullptr) return;
@@ -975,6 +1138,11 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
     diceOneField.setMaxLength(2);
     diceTwoField.setMaxLength(2);
     auctionBidField.setMaxLength(12);
+    tradeTargetField.setMaxLength(24);
+    tradeOfferPropsField.setMaxLength(96);
+    tradeOfferMoneyField.setMaxLength(12);
+    tradeRequestPropsField.setMaxLength(96);
+    tradeRequestMoneyField.setMaxLength(12);
 
     diceRollButton.setOnClick([this]() {
         showDiceModal = false;
@@ -1025,6 +1193,25 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
         finishAuctionNotice();
     });
 
+    tradeSendButton.setOnClick([this]() {
+        onTradeSubmit();
+    });
+
+    tradeCancelButton.setOnClick([this]() {
+        showTradeModal = false;
+        tradeResponseMode = false;
+        pendingTrade = nullptr;
+        tradeError.clear();
+    });
+
+    tradeAcceptButton.setOnClick([this]() {
+        onTradeAccept();
+    });
+
+    tradeRejectButton.setOnClick([this]() {
+        onTradeReject();
+    });
+
     backToMenuBtn.setOnClick([this]() {
         sceneManager->setScene(SceneType::MainMenu);
     });
@@ -1053,6 +1240,16 @@ void InGameScene::onEnter() {
     auctionNoticeLines.clear();
     auctionModalVis = 0;
     auctionBidField.setContent("");
+    showTradeModal = false;
+    tradeResponseMode = false;
+    tradeError.clear();
+    pendingTrade = nullptr;
+    tradeModalVis = 0;
+    tradeTargetField.setContent("");
+    tradeOfferPropsField.setContent("");
+    tradeOfferMoneyField.setContent("");
+    tradeRequestPropsField.setContent("");
+    tradeRequestMoneyField.setContent("");
 
     tokenPos.clear();
     tokenPhase.clear();
@@ -1391,6 +1588,190 @@ void InGameScene::onSaveGame() {
     }
 }
 
+void InGameScene::openTradeProposal() {
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr || g->isGameOver()) {
+        return;
+    }
+
+    if (g->getAuctionManager().isAuctionActive() || showAuctionModal) {
+        showAuctionModal = true;
+        overlayOpen = false;
+        return;
+    }
+
+    refreshPropertyDecisionState();
+    if (hasBlockingPropertyDecision()) {
+        showOverlay(
+            "Trade Ditunda",
+            {
+                "Selesaikan keputusan properti terlebih dahulu.",
+                "Pilih Beli atau Lelang sebelum melakukan trade."
+            }
+        );
+        return;
+    }
+
+    tradeTargetField.setContent("");
+    tradeOfferPropsField.setContent("");
+    tradeOfferMoneyField.setContent("");
+    tradeRequestPropsField.setContent("");
+    tradeRequestMoneyField.setContent("");
+    tradeError.clear();
+    pendingTrade = nullptr;
+    tradeResponseMode = false;
+    showTradeModal = true;
+    overlayOpen = false;
+}
+
+void InGameScene::onTradeSubmit() {
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr || g->isGameOver()) {
+        return;
+    }
+
+    int currentIndex = g->getTurnManager().getCurrentPlayerIndex();
+    if (currentIndex < 0 || currentIndex >= static_cast<int>(g->getPlayers().size())) {
+        tradeError = "Pemain aktif tidak valid.";
+        return;
+    }
+
+    Player* proposer = &g->getPlayer(currentIndex);
+    Player* target = findPlayerByUsername(g, tradeTargetField.getContent());
+    if (target == nullptr) {
+        tradeError = "Nama player lawan tidak valid.";
+        return;
+    }
+
+    if (target == proposer) {
+        tradeError = "Tidak bisa trade dengan diri sendiri.";
+        return;
+    }
+
+    if (target->isBankrupt()) {
+        tradeError = "Tidak bisa trade dengan player bangkrut.";
+        return;
+    }
+
+    int offeredMoney = 0;
+    int requestedMoney = 0;
+    std::vector<PropertyTile*> offeredProps;
+    std::vector<PropertyTile*> requestedProps;
+    std::string error;
+
+    if (!parseMoneyField(tradeOfferMoneyField.getContent(), offeredMoney, error, "Uang diberikan") ||
+        !parseMoneyField(tradeRequestMoneyField.getContent(), requestedMoney, error, "Uang diminta") ||
+        !parsePropertyList(g, tradeOfferPropsField.getContent(), offeredProps, error, "properti diberikan") ||
+        !parsePropertyList(g, tradeRequestPropsField.getContent(), requestedProps, error, "properti diminta")) {
+        tradeError = error;
+        return;
+    }
+
+    if (offeredMoney == 0 && requestedMoney == 0 && offeredProps.empty() && requestedProps.empty()) {
+        tradeError = "Trade harus berisi uang atau properti.";
+        return;
+    }
+
+    if (!proposer->canAfford(offeredMoney)) {
+        tradeError = "Uang yang diberikan melebihi saldo player aktif.";
+        return;
+    }
+
+    if (!target->canAfford(requestedMoney)) {
+        tradeError = "Uang yang diminta melebihi saldo player lawan.";
+        return;
+    }
+
+    for (PropertyTile* property : offeredProps) {
+        if (property->getOwner() != proposer) {
+            tradeError = "Properti " + property->getCode() + " bukan milik player aktif.";
+            return;
+        }
+
+        StreetTile* street = dynamic_cast<StreetTile*>(property);
+        if (street != nullptr && street->getBuildingLevel() > 0) {
+            tradeError = "Properti " + property->getCode() + " masih memiliki bangunan.";
+            return;
+        }
+    }
+
+    for (PropertyTile* property : requestedProps) {
+        if (property->getOwner() != target) {
+            tradeError = "Properti " + property->getCode() + " bukan milik player lawan.";
+            return;
+        }
+
+        StreetTile* street = dynamic_cast<StreetTile*>(property);
+        if (street != nullptr && street->getBuildingLevel() > 0) {
+            tradeError = "Properti " + property->getCode() + " masih memiliki bangunan.";
+            return;
+        }
+    }
+
+    try {
+        pendingTrade = g->getTradeManager().proposeTrade(
+            proposer,
+            target,
+            offeredProps,
+            offeredMoney,
+            requestedProps,
+            requestedMoney
+        );
+
+        tradeError.clear();
+        tradeResponseMode = true;
+    } catch (const std::exception& e) {
+        tradeError = std::string("Trade gagal: ") + e.what();
+    }
+}
+
+void InGameScene::onTradeAccept() {
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr || pendingTrade == nullptr) {
+        showTradeModal = false;
+        tradeResponseMode = false;
+        pendingTrade = nullptr;
+        return;
+    }
+
+    std::vector<std::string> lines = buildTradeLines(pendingTrade);
+
+    try {
+        g->getTradeManager().acceptTrade(pendingTrade);
+        pendingTrade = nullptr;
+        showTradeModal = false;
+        tradeResponseMode = false;
+        tradeError.clear();
+        lines.push_back("Trade diterima. Kepemilikan dan uang sudah ditukar.");
+        showOverlay("Trade Diterima", lines);
+    } catch (const std::exception& e) {
+        pendingTrade = nullptr;
+        showTradeModal = false;
+        tradeResponseMode = false;
+        tradeError.clear();
+        showOverlay("Trade Gagal", {std::string(e.what())});
+    }
+}
+
+void InGameScene::onTradeReject() {
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr || pendingTrade == nullptr) {
+        showTradeModal = false;
+        tradeResponseMode = false;
+        pendingTrade = nullptr;
+        return;
+    }
+
+    std::vector<std::string> lines = buildTradeLines(pendingTrade);
+    g->getTradeManager().rejectTrade(pendingTrade);
+    pendingTrade = nullptr;
+    showTradeModal = false;
+    tradeResponseMode = false;
+    tradeError.clear();
+    lines.push_back("Trade ditolak. Tidak ada perubahan.");
+    showOverlay("Trade Ditolak", lines);
+}
+
 void InGameScene::showOverlay(
     const std::string& title,
     const std::vector<std::string>& lines,
@@ -1433,6 +1814,7 @@ void InGameScene::updateAnimations(const Rectangle& br){
     diceModalVis = ease(diceModalVis, showDiceModal ? 1.f : 0.f, dt * 8);
     logModalVis = ease(logModalVis, showLogModal ? 1.f : 0.f, dt * 8);
     auctionModalVis = ease(auctionModalVis, showAuctionModal ? 1.f : 0.f, dt * 8);
+    tradeModalVis = ease(tradeModalVis, showTradeModal ? 1.f : 0.f, dt * 8);
 }
 
 void InGameScene::update(){
@@ -1447,6 +1829,17 @@ void InGameScene::update(){
     if (IsKeyPressed(KEY_ESCAPE)) {
         if (showAuctionModal && auctionNoticeMode) {
             finishAuctionNotice();
+            return;
+        }
+
+        if (showTradeModal) {
+            if (tradeResponseMode) {
+                onTradeReject();
+            } else {
+                showTradeModal = false;
+                tradeError.clear();
+                pendingTrade = nullptr;
+            }
             return;
         }
 
@@ -1477,7 +1870,7 @@ void InGameScene::update(){
     }
 
     bool noModalActive = saveModalVis < .02f && diceModalVis < .02f && logModalVis < .02f &&
-                         auctionModalVis < .02f && overlayVis < .02f;
+                         auctionModalVis < .02f && tradeModalVis < .02f && overlayVis < .02f;
 
     if (noModalActive && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
         Vector2 m = GetMousePosition();
@@ -1721,6 +2114,62 @@ void InGameScene::update(){
             auctionBidField.update();
             auctionBidButton.update();
             auctionPassButton.update();
+        }
+    }
+
+    if (tradeModalVis > .01f) {
+        Rectangle p{
+            sr.width * .5f - 360,
+            sr.height * .5f - 330 + (1 - tradeModalVis) * 24,
+            720,
+            660
+        };
+
+        if (tradeResponseMode) {
+            tradeAcceptButton.setBoundary({
+                p.x + p.width - 352,
+                p.y + p.height - 72,
+                146,
+                50
+            });
+
+            tradeRejectButton.setBoundary({
+                p.x + p.width - 182,
+                p.y + p.height - 72,
+                134,
+                50
+            });
+
+            tradeAcceptButton.update();
+            tradeRejectButton.update();
+        } else {
+            tradeTargetField.setBoundary({p.x + 24, p.y + 112, p.width - 48, 46});
+            tradeOfferPropsField.setBoundary({p.x + 24, p.y + 238, p.width - 260, 46});
+            tradeOfferMoneyField.setBoundary({p.x + p.width - 212, p.y + 238, 188, 46});
+            tradeRequestPropsField.setBoundary({p.x + 24, p.y + 374, p.width - 260, 46});
+            tradeRequestMoneyField.setBoundary({p.x + p.width - 212, p.y + 374, 188, 46});
+
+            tradeSendButton.setBoundary({
+                p.x + p.width - 204,
+                p.y + p.height - 72,
+                156,
+                50
+            });
+
+            tradeCancelButton.setBoundary({
+                p.x + 48,
+                p.y + p.height - 72,
+                140,
+                50
+            });
+
+            tradeTargetField.update();
+            tradeOfferPropsField.update();
+            tradeOfferMoneyField.update();
+            tradeRequestPropsField.update();
+            tradeRequestMoneyField.update();
+            tradeSendButton.update();
+            tradeCancelButton.update();
         }
     }
 }
@@ -2466,6 +2915,168 @@ void InGameScene::drawAuctionModal(Rectangle sr) {
     auctionPassButton.draw();
 }
 
+void InGameScene::drawTradeModal(Rectangle sr) {
+    if (tradeModalVis <= .01f || !showTradeModal) return;
+
+    DrawRectangle(
+        0,
+        0,
+        GetScreenWidth(),
+        GetScreenHeight(),
+        Fade(kText, .38f * tradeModalVis)
+    );
+
+    Rectangle p{
+        sr.width * .5f - 360,
+        sr.height * .5f - 330 + (1 - tradeModalVis) * 24,
+        720,
+        660
+    };
+
+    DrawRectangleRounded({p.x + 5, p.y + 9, p.width, p.height}, .09f, 10, Fade(kText, .12f * tradeModalVis));
+    DrawRectangleRounded(p, .09f, 10, Fade({250,255,235,255}, tradeModalVis));
+    DrawRectangleRoundedLinesEx(p, .09f, 10, 2.5f, Fade(kPanelBorder, tradeModalVis));
+    drawSmallFlower(p.x + p.width - 28, p.y + 28, 14, sceneTime * .5f, .5f * tradeModalVis);
+
+    if (tradeResponseMode) {
+        DrawText("Konfirmasi Trade", static_cast<int>(p.x + 24), static_cast<int>(p.y + 24), 32, kText);
+
+        std::vector<std::string> lines = buildTradeLines(pendingTrade);
+        float y = p.y + 92;
+
+        for (const std::string& line : lines) {
+            DrawText(
+                fitText(line, 22, static_cast<int>(p.width - 48)).c_str(),
+                static_cast<int>(p.x + 24),
+                static_cast<int>(y),
+                22,
+                kSubtext
+            );
+            y += 42;
+        }
+
+        DrawText(
+            "Player target dapat menerima atau menolak penawaran ini.",
+            static_cast<int>(p.x + 24),
+            static_cast<int>(p.y + 306),
+            20,
+            kText
+        );
+
+        if (!tradeError.empty()) {
+            DrawText(
+                fitText(tradeError, 18, static_cast<int>(p.width - 48)).c_str(),
+                static_cast<int>(p.x + 24),
+                static_cast<int>(p.y + 352),
+                18,
+                kDanger
+            );
+        }
+
+        tradeAcceptButton.setBoundary({
+            p.x + p.width - 352,
+            p.y + p.height - 72,
+            146,
+            50
+        });
+
+        tradeRejectButton.setBoundary({
+            p.x + p.width - 182,
+            p.y + p.height - 72,
+            134,
+            50
+        });
+
+        tradeAcceptButton.draw();
+        tradeRejectButton.draw();
+        return;
+    }
+
+    DrawText("Ajukan Trade", static_cast<int>(p.x + 24), static_cast<int>(p.y + 24), 32, kText);
+    DrawText(
+        "Masukkan kode properti dipisah koma atau spasi. Field uang/properti boleh kosong.",
+        static_cast<int>(p.x + 24),
+        static_cast<int>(p.y + 70),
+        18,
+        kSubtext
+    );
+
+    DrawText("Player Lawan", static_cast<int>(p.x + 24), static_cast<int>(p.y + 88), 18, kText);
+    tradeTargetField.setBoundary({p.x + 24, p.y + 112, p.width - 48, 46});
+    tradeTargetField.draw();
+
+    DrawText("Yang Diberikan", static_cast<int>(p.x + 24), static_cast<int>(p.y + 188), 22, kText);
+    DrawText("Properti", static_cast<int>(p.x + 24), static_cast<int>(p.y + 216), 16, kSubtext);
+    DrawText("Uang", static_cast<int>(p.x + p.width - 212), static_cast<int>(p.y + 216), 16, kSubtext);
+    tradeOfferPropsField.setBoundary({p.x + 24, p.y + 238, p.width - 260, 46});
+    tradeOfferMoneyField.setBoundary({p.x + p.width - 212, p.y + 238, 188, 46});
+    tradeOfferPropsField.draw();
+    tradeOfferMoneyField.draw();
+
+    DrawText("Yang Diminta", static_cast<int>(p.x + 24), static_cast<int>(p.y + 324), 22, kText);
+    DrawText("Properti", static_cast<int>(p.x + 24), static_cast<int>(p.y + 352), 16, kSubtext);
+    DrawText("Uang", static_cast<int>(p.x + p.width - 212), static_cast<int>(p.y + 352), 16, kSubtext);
+    tradeRequestPropsField.setBoundary({p.x + 24, p.y + 374, p.width - 260, 46});
+    tradeRequestMoneyField.setBoundary({p.x + p.width - 212, p.y + 374, 188, 46});
+    tradeRequestPropsField.draw();
+    tradeRequestMoneyField.draw();
+
+    if (!tradeError.empty()) {
+        DrawText(
+            fitText(tradeError, 18, static_cast<int>(p.width - 48)).c_str(),
+            static_cast<int>(p.x + 24),
+            static_cast<int>(p.y + 438),
+            18,
+            kDanger
+        );
+    }
+
+    Game* g = gameManager->getCurrentGame();
+    if (g != nullptr) {
+        int currentIndex = g->getTurnManager().getCurrentPlayerIndex();
+        float y = p.y + 472;
+        DrawText("Player tersedia:", static_cast<int>(p.x + 24), static_cast<int>(y), 18, kText);
+        y += 26;
+
+        for (std::size_t i = 0; i < g->getPlayers().size(); ++i) {
+            if (static_cast<int>(i) == currentIndex) {
+                continue;
+            }
+
+            Player& player = g->getPlayers()[i];
+            std::string row = player.getUsername() + " - " + formatMoney(player.getMoney());
+            DrawText(
+                fitText(row, 17, static_cast<int>(p.width - 48)).c_str(),
+                static_cast<int>(p.x + 24),
+                static_cast<int>(y),
+                17,
+                player.isBankrupt() ? kDanger : kSubtext
+            );
+            y += 24;
+            if (y > p.y + p.height - 100) {
+                break;
+            }
+        }
+    }
+
+    tradeSendButton.setBoundary({
+        p.x + p.width - 204,
+        p.y + p.height - 72,
+        156,
+        50
+    });
+
+    tradeCancelButton.setBoundary({
+        p.x + 48,
+        p.y + p.height - 72,
+        140,
+        50
+    });
+
+    tradeSendButton.draw();
+    tradeCancelButton.draw();
+}
+
 void InGameScene::draw() {
     Rectangle sr{
         0,
@@ -2488,4 +3099,5 @@ void InGameScene::draw() {
     drawDiceModal(sr);
     drawLogModal(sr);
     drawAuctionModal(sr);
+    drawTradeModal(sr);
 }
