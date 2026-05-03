@@ -67,6 +67,11 @@ void MoveCard::use(Player* target, Game* game)
         throw InvalidActionException("MOVE TARGET/GAME TIDAK VALID");
     }
 
+    if (target->getStatus() == PlayerStatus::JAILED)
+    {
+        throw InvalidActionException("ANDA DIPENJARA");
+    }
+
     Board& board = game->getBoard();
 
     if (board.size() <= 0)
@@ -175,6 +180,11 @@ void TeleportCard::use(Player* target, Game* game)
         throw InvalidActionException("TELEPORT TARGET/GAME TIDAK VALID");
     }
 
+    if (target->getStatus() == PlayerStatus::JAILED)
+    {
+        throw InvalidActionException("ANDA DIPENJARA");
+    }
+
     Board& board = game->getBoard();
     int boardSize = board.size();
 
@@ -227,6 +237,11 @@ void LassoCard::use(Player* target, Game* game)
     if (enemy == nullptr || enemy == target || enemy->isBankrupt())
     {
         throw InvalidActionException("LASSO PLAYER TIDAK VALID");
+    }
+
+    if (enemy->getStatus() == PlayerStatus::JAILED)
+    {
+        throw InvalidActionException("TARGET DIPENJARA");
     }
 
     enemy->moveTo(target->getPosition());
