@@ -50,7 +50,7 @@ bool TurnManager::isMaxTurnReached() const {
     if (maxTurn <= 0) {
         return false;
     }
-    return currentTurn > maxTurn;
+    return currentTurn >= maxTurn;
 }
 
 int TurnManager::getCurrentPlayerIndex() const {
@@ -105,4 +105,12 @@ void TurnManager::setTurnOrder(const vector<int>& turnOrder) {
                this->currentPlayerIndex >= static_cast<int>(this->turnOrder.size())) {
         this->currentPlayerIndex = 0;
     }
+}
+
+bool TurnManager::isLastPlayerInCurrentTurn() const {
+    if (turnOrder.empty()) {
+        return true;
+    }
+
+    return currentPlayerIndex >= static_cast<int>(turnOrder.size()) - 1;
 }

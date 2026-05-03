@@ -135,6 +135,41 @@ namespace {
         return "M" + formatted;
     }
 
+    std::vector<std::string> buildRankingLines(Game* game) {
+        std::vector<std::string> lines;
+
+        if (game == nullptr) {
+            return lines;
+        }
+
+        std::vector<Player*> sorted;
+
+        for (Player& player : game->getPlayers()) {
+            sorted.push_back(&player);
+        }
+
+        std::sort(sorted.begin(), sorted.end(), [](Player* a, Player* b) {
+            return a->getTotalWealth() > b->getTotalWealth();
+        });
+
+        lines.push_back("=== Klasemen Akhir ===");
+
+        for (std::size_t i = 0; i < sorted.size(); ++i) {
+            std::string row =
+                std::to_string(i + 1) + ". " +
+                sorted[i]->getUsername() +
+                " - " + formatMoney(sorted[i]->getTotalWealth());
+
+            if (sorted[i]->isBankrupt()) {
+                row += " [BANGKRUT]";
+            }
+
+            lines.push_back(row);
+        }
+
+        return lines;
+    }
+
     std::string displayName(std::string value) {
         for (char& c : value) {
             if (c == '_') {
@@ -794,9 +829,19 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             }
 
             g->endTurn();
+
             propertyDecisionPending = false;
             propertyDecisionResolved = false;
             pendingProperty = nullptr;
+
+            if (g->isGameOver()) {
+                showOverlay(
+                    "Permainan Selesai",
+                    buildRankingLines(g),
+                    "Batas maksimum turn telah tercapai."
+                );
+                return;
+            }
 
             showOverlay(
                 "Giliran Selesai",
@@ -806,35 +851,51 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             );
         }},
 
+        // {"Kemenangan", [this]() {
+        //     Game* g = gameManager->getCurrentGame();
+        //     if (g == nullptr) return;
+
+        //     std::vector<Player*> sorted;
+        //     for (Player& p : g->getPlayers()) {
+        //         sorted.push_back(&p);
+        //     }
+
+        //     std::sort(sorted.begin(), sorted.end(), [](Player* a, Player* b) {
+        //         return a->getTotalWealth() > b->getTotalWealth();
+        //     });
+
+        //     std::vector<std::string> lines;
+        //     lines.push_back("=== Klasemen Sementara ===");
+
+        //     for (std::size_t i = 0; i < sorted.size(); ++i) {
+        //         lines.push_back(
+        //             std::to_string(i + 1) + ". " +
+        //             sorted[i]->getUsername() +
+        //             " - M" + std::to_string(sorted[i]->getTotalWealth()) +
+        //             (sorted[i]->isBankrupt() ? " [BANGKRUT]" : "")
+        //         );
+        //     }
+
+        //     showOverlay(
+        //         "Kemenangan",
+        //         lines,
+        //         "Pemenang final ditentukan berdasarkan kondisi gameOver / max turn."
+        //     );
+        // }},
+
         {"Kemenangan", [this]() {
             Game* g = gameManager->getCurrentGame();
-            if (g == nullptr) return;
 
-            std::vector<Player*> sorted;
-            for (Player& p : g->getPlayers()) {
-                sorted.push_back(&p);
-            }
-
-            std::sort(sorted.begin(), sorted.end(), [](Player* a, Player* b) {
-                return a->getTotalWealth() > b->getTotalWealth();
-            });
-
-            std::vector<std::string> lines;
-            lines.push_back("=== Klasemen Sementara ===");
-
-            for (std::size_t i = 0; i < sorted.size(); ++i) {
-                lines.push_back(
-                    std::to_string(i + 1) + ". " +
-                    sorted[i]->getUsername() +
-                    " - M" + std::to_string(sorted[i]->getTotalWealth()) +
-                    (sorted[i]->isBankrupt() ? " [BANGKRUT]" : "")
-                );
+            if (g == nullptr) {
+                return;
             }
 
             showOverlay(
-                "Kemenangan",
-                lines,
-                "Pemenang final ditentukan berdasarkan kondisi gameOver / max turn."
+                g->isGameOver() ? "Kemenangan" : "Klasemen Sementara",
+                buildRankingLines(g),
+                g->isGameOver()
+                    ? "Game sudah selesai."
+                    : "Game belum selesai, ini hanya klasemen sementara."
             );
         }},
     };
