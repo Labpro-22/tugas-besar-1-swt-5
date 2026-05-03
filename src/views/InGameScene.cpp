@@ -1451,11 +1451,20 @@ void InGameScene::rollDiceAndShowResult() {
 
 void InGameScene::onManualDiceSubmit() {
     auto parseDie = [](const std::string& text, int& value) -> bool {
-        if (text.size() != 1 || !std::isdigit(static_cast<unsigned char>(text[0]))) {
+        if (text.empty()) return false;
+        std::size_t start = 0;
+        if (text[0] == '-') {
+            if (text.size() == 1) return false;
+            start = 1;
+        }
+        for (std::size_t i = start; i < text.size(); ++i) {
+            if (!std::isdigit(static_cast<unsigned char>(text[i]))) return false;
+        }
+        try {
+            value = std::stoi(text);
+        } catch (...) {
             return false;
         }
-
-        value = text[0] - '0';
         return true;
     };
 
