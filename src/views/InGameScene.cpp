@@ -510,6 +510,41 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             overlayOpen = false;
         }},
 
+        {"Bayar Penjara", [this]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr || g->isGameOver()) return;
+
+            int idx = g->getTurnManager().getCurrentPlayerIndex();
+            if (idx < 0 || idx >= static_cast<int>(g->getPlayers().size())) return;
+            Player& current = g->getPlayer(idx);
+            int fine = g->getConfig().getSpecialConfig(JAIL_FINE);
+
+            bool ok = g->payJailFineForCurrentPlayer();
+            showOverlay(
+                ok ? "Keluar Penjara" : "Bayar Penjara Gagal",
+                {
+                    ok
+                        ? current.getUsername() + " keluar penjara dengan membayar " + formatMoney(fine) + "."
+                        : "Pembayaran hanya bisa dilakukan saat pemain aktif berada di penjara dan belum melempar dadu."
+                }
+            );
+        }},
+
+        {"Kartu Penjara", [this]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr || g->isGameOver()) return;
+
+            bool ok = g->useJailFreeCardForCurrentPlayer();
+            showOverlay(
+                ok ? "Keluar Penjara" : "Kartu Tidak Tersedia",
+                {
+                    ok
+                        ? "Kartu Bebas dari Penjara digunakan."
+                        : "Pemain aktif harus berada di penjara, belum melempar dadu, dan memiliki kartu Bebas dari Penjara."
+                }
+            );
+        }},
+
         {"Beli", [this]() {
             Game* g = gameManager->getCurrentGame();
             if (g == nullptr || g->isGameOver()) return;
@@ -828,6 +863,22 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
                 return;
             }
 
+            if (g->isExtraRollPending()) {
+                if (g->prepareExtraRollForCurrentPlayer()) {
+                    propertyDecisionPending = false;
+                    propertyDecisionResolved = false;
+                    pendingProperty = nullptr;
+                    showOverlay(
+                        "Double",
+                        {
+                            "Pemain mendapat giliran ekstra.",
+                            "Lempar dadu lagi untuk melanjutkan giliran."
+                        }
+                    );
+                    return;
+                }
+            }
+
             g->endTurn();
 
             propertyDecisionPending = false;
@@ -1020,7 +1071,17 @@ void InGameScene::rollDiceAndShowResult() {
     auto result = g->rollDiceForCurrentPlayer();
 
     if (result.first == 0 && result.second == 0) {
-        showOverlay("Dadu", {"Dadu tidak bisa dilempar saat ini."});
+        int idx = g->getTurnManager().getCurrentPlayerIndex();
+        if (idx >= 0 && idx < static_cast<int>(g->getPlayers().size()) &&
+            g->getPlayer(idx).getStatus() == PlayerStatus::JAILED &&
+            g->getPlayer(idx).getJailTurnsAttempted() >= 3) {
+            showOverlay(
+                "Penjara",
+                {"Sudah gagal 3 kali. Pemain wajib membayar denda penjara sebelum melempar dadu."}
+            );
+        } else {
+            showOverlay("Dadu", {"Dadu tidak bisa dilempar saat ini."});
+        }
         return;
     }
 
@@ -1049,10 +1110,16 @@ void InGameScene::rollDiceAndShowResult() {
 
     showOverlay(
         "Dadu",
-        {
+        g->isExtraRollPending()
+            ? std::vector<std::string>{
+                "Hasil: " + std::to_string(result.first) + " + " + std::to_string(result.second),
+                "Total langkah: " + std::to_string(result.first + result.second),
+                "Double! Pilih Akhir Giliran untuk menyiapkan roll ekstra."
+              }
+            : std::vector<std::string>{
             "Hasil: " + std::to_string(result.first) + " + " + std::to_string(result.second),
             "Total langkah: " + std::to_string(result.first + result.second)
-        }
+              }
     );
 }
 
@@ -1430,8 +1497,9 @@ void InGameScene::update(){
     }
 
     float bw = (sb.width - 14) * .5f;
-    float bh = 44;
-    float sy = sb.y + 238;
+    float bh = 40;
+    float sy = sb.y + 232;
+    float rowGap = 46;
     bool diceButtonDisabled = false;
 
     if (g != nullptr) {
@@ -1448,7 +1516,7 @@ void InGameScene::update(){
 
         actionButtons[i].setBoundary({
             sb.x + c * (bw + 14),
-            sy + r * 54,
+            sy + r * rowGap,
             bw,
             bh
         });

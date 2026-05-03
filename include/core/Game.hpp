@@ -34,6 +34,7 @@ private:
     bool gameOver;
     int lastDiceTotal;
     bool hasRolledThisTurn;
+    bool extraRollPending;
     
 public:
     // Constructor
@@ -63,6 +64,10 @@ public:
     void setLastDiceTotal(int total);
     int getLastDiceTotal() const;
     bool getHasRolledThisTurn() const;
+    bool isExtraRollPending() const;
+    bool prepareExtraRollForCurrentPlayer();
+    bool payJailFineForCurrentPlayer();
+    bool useJailFreeCardForCurrentPlayer();
 
     // Getters / Setters    
     Board& getBoard();

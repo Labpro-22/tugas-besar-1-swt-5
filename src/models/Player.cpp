@@ -47,10 +47,13 @@ std::unique_ptr<AbilityCard> Player::dropCard(int index) {
 }
 void Player::enterJail() {
     this->status = PlayerStatus::JAILED;
+    this->jailTurnsAttempted = 0;
+    this->consecutiveDoubleCount = 0;
 }
 void Player::releaseFromJail() {
     this->status = PlayerStatus::ACTIVE;
     this->jailTurnsAttempted = 0;
+    this->consecutiveDoubleCount = 0;
 }
 void Player::incrementJailAttempt() {
     this->jailTurnsAttempted++;

@@ -1,5 +1,6 @@
 #include "../../include/core/Game.hpp"
 #include "../../include/models/AbilityCard.hpp"
+#include "../../include/models/DerivedAbilityCard.hpp"
 #include "../../include/utils/StreetTile.hpp"
 #include "../../include/utils/PropertyTile.hpp"
 #include "../../include/core/BankruptException.hpp"
@@ -11,6 +12,24 @@
 #include <stdexcept>
 
 using namespace std;
+
+namespace {
+PropertyTile* currentBankProperty(Game& game, Player& player) {
+    if (game.getBoard().size() == 0) {
+        return nullptr;
+    }
+
+    PropertyTile* property = dynamic_cast<PropertyTile*>(
+        game.getBoard().getTileByIndex(player.getPosition())
+    );
+
+    if (property == nullptr || property->getStatus() != BANK) {
+        return nullptr;
+    }
+
+    return property;
+}
+}
 
 Game::Game()
     : board(),
@@ -26,7 +45,8 @@ Game::Game()
       config(),
       gameOver(false),
       lastDiceTotal(0),
-      hasRolledThisTurn(false) {}
+      hasRolledThisTurn(false),
+      extraRollPending(false) {}
 
 // ──────────────────────────────────────────────
 // GAME LOOP
@@ -82,6 +102,8 @@ void Game::startTurn() {
     // REPL
     bool turnEnded = false;
     bool hasRolled = false;
+    PropertyTile* resolvedPropertyDecision = nullptr;
+    extraRollPending = false;
 
     while (!turnEnded && !gameOver) {
         cout << "\n[" << current.getUsername() << "] >> ";
@@ -131,7 +153,7 @@ void Game::startTurn() {
                          << " - " << hand[i]->getDescription() << "\n";
 
             } else if (cmd == "ATUR_DADU") {
-                if (hasRolled) { cout << "Dadu sudah dilempar.\n"; continue; }
+                if (hasRolled && !extraRollPending) { cout << "Dadu sudah dilempar.\n"; continue; }
                 int d1 = 0, d2 = 0; ss >> d1 >> d2;
                 if (d1 < 1 || d1 > 6 || d2 < 1 || d2 > 6)
                     cout << "Nilai dadu harus 1-6.\n";
@@ -146,11 +168,32 @@ void Game::startTurn() {
                            "KARTU_KEMAMPUAN", "Kartu ke-" + to_string(idx));
 
             } else if (cmd == "LEMPAR_DADU") {
-                if (hasRolled) { cout << "Dadu sudah dilempar.\n"; continue; }
+                if (hasRolled && !extraRollPending) { cout << "Dadu sudah dilempar.\n"; continue; }
+                if (extraRollPending) {
+                    PropertyTile* blockingProperty = currentBankProperty(*this, current);
+                    if (blockingProperty != nullptr && blockingProperty != resolvedPropertyDecision) {
+                        cout << "Selesaikan BELI atau LELANG " << blockingProperty->getName()
+                             << " sebelum lempar dadu lagi.\n";
+                        continue;
+                    }
+                    if (auctionManager.isAuctionActive()) {
+                        cout << "Selesaikan lelang aktif sebelum lempar dadu lagi.\n";
+                        continue;
+                    }
+                    hasRolled = false;
+                    hasRolledThisTurn = false;
+                    extraRollPending = false;
+                }
+                if (current.getStatus() == PlayerStatus::JAILED && current.getJailTurnsAttempted() >= 3) {
+                    cout << "Sudah gagal 3 kali. Giliran ini wajib bayar denda penjara sebelum lempar dadu.\n";
+                    continue;
+                }
 
                 auto result = dice.roll();
                 int d1 = result.first, d2 = result.second;
                 setLastDiceTotal(d1 + d2);
+                hasRolledThisTurn = true;
+                resolvedPropertyDecision = nullptr;
                 cout << current.getUsername() << " melempar: " << d1 << "+" << d2 << "=" << d1+d2 << "\n";
 
                 if (current.getStatus() == PlayerStatus::JAILED) {
@@ -171,10 +214,7 @@ void Game::startTurn() {
                         cout << "Tidak double. Percobaan " << current.getJailTurnsAttempted() << "/3.\n";
                         if (current.getJailTurnsAttempted() >= 3) {
                             int fine = config.getSpecialConfig(JAIL_FINE);
-                            cout << "Giliran ke-4! Wajib bayar denda M" << fine << ".\n";
-                            current.pay(fine);
-                            current.releaseFromJail();
-                            logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA", "Bayar denda M" + to_string(fine));
+                            cout << "Batas percobaan habis. Pada giliran penjara berikutnya wajib bayar denda M" << fine << ".\n";
                         }
                         hasRolled = true;
                         turnEnded = true;
@@ -187,10 +227,11 @@ void Game::startTurn() {
                                to_string(d1) + "+" + to_string(d2));
                     bool isDouble = dice.isDouble(result);
                     if (isDouble) {
-                        current.consecutiveDoubleCount++;
+                        current.addConsecutiveDouble();
                         if (current.getConsecutiveDoubleCount() >= 3) {
                             cout << "3 double! Masuk penjara.\n";
-                            current.moveTo(board.getJailIndex());
+                            int jailIndex = board.getJailIndex();
+                            if (jailIndex >= 0) current.moveTo(jailIndex);
                             current.enterJail();
                             logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA", "3 double berturut");
                             hasRolled = true; turnEnded = true;
@@ -207,10 +248,10 @@ void Game::startTurn() {
                     handleLanding(current);
 
                     if (isDouble && current.getStatus() != PlayerStatus::JAILED) {
-                        cout << "Double! Giliran ekstra.\n";
-                        turnManager.grantExtraTurn();
-                        hasRolled = true; turnEnded = true;
-                        endTurn(); return;
+                        cout << "Double! Selesaikan BELI/LELANG jika ada, lalu lempar dadu lagi.\n";
+                        extraRollPending = true;
+                    } else if (!isDouble) {
+                        current.resetConsecutiveDouble();
                     }
                 }
                 hasRolled = true;
@@ -224,6 +265,7 @@ void Game::startTurn() {
                 current.pay(price);
                 pt->setOwner(&current);
                 current.addProperty(pt);
+                resolvedPropertyDecision = pt;
                 cout << "Beli " << pt->getName() << " M" << price << ".\n";
                 logger.log(turnManager.getCurrentTurn(), current.getUsername(), "BELI", pt->getName() + " M" + to_string(price));
 
@@ -234,6 +276,7 @@ void Game::startTurn() {
                 vector<Player*> bidders;
                 for (Player& p : players) { if (!p.isBankrupt()) bidders.push_back(&p); }
                 auctionManager.runAuction(*pt, bidders, current, *this);
+                resolvedPropertyDecision = pt;
                 cout << "Lelang dimulai. Gunakan TAWAR <jumlah> atau PASS.\n";
 
             } else if (cmd == "TAWAR") {
@@ -289,9 +332,19 @@ void Game::startTurn() {
                 if (hasRolled) { cout << "Sudah terlambat.\n"; continue; }
                 int fine = config.getSpecialConfig(JAIL_FINE);
                 if (!current.canAfford(fine)) { cout << "Tidak cukup M" << fine << ".\n"; continue; }
-                current.pay(fine); current.releaseFromJail();
+                payBankOrBankrupt(current, fine, "Denda penjara");
+                if (!current.isBankrupt()) current.releaseFromJail();
                 cout << "Keluar penjara bayar M" << fine << ".\n";
                 logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA", "Bayar denda M" + to_string(fine));
+
+            } else if (cmd == "KELUAR_PENJARA_KARTU") {
+                if (current.getStatus() != PlayerStatus::JAILED) { cout << "Tidak di penjara.\n"; continue; }
+                if (hasRolled) { cout << "Sudah terlambat.\n"; continue; }
+                if (useJailFreeCardForCurrentPlayer()) {
+                    cout << "Keluar penjara dengan kartu Bebas dari Penjara.\n";
+                } else {
+                    cout << "Tidak memiliki kartu Bebas dari Penjara.\n";
+                }
 
             } else if (cmd == "SIMPAN") {
                 if (hasRolled) { cout << "Simpan hanya bisa sebelum lempar dadu.\n"; continue; }
@@ -299,6 +352,17 @@ void Game::startTurn() {
 
             } else if (cmd == "AKHIRI_GILIRAN") {
                 if (!hasRolled) { cout << "Lempar dadu dulu.\n"; continue; }
+                if (auctionManager.isAuctionActive()) { cout << "Selesaikan lelang aktif dulu.\n"; continue; }
+                PropertyTile* blockingProperty = currentBankProperty(*this, current);
+                if (blockingProperty != nullptr && blockingProperty != resolvedPropertyDecision) {
+                    cout << "Properti " << blockingProperty->getName()
+                         << " belum diproses. Pilih BELI atau LELANG dulu.\n";
+                    continue;
+                }
+                if (extraRollPending) {
+                    cout << "Masih ada giliran ekstra karena double. Lempar dadu lagi.\n";
+                    continue;
+                }
                 turnEnded = true;
 
             } else if (!cmd.empty()) {
@@ -346,6 +410,7 @@ void Game::endTurn() {
 
     current.consecutiveDoubleCount = 0;
     hasRolledThisTurn = false;
+    extraRollPending = false;
 
     const bool finalTurnFinished =
         turnManager.getMaxTurn() > 0 &&
@@ -412,28 +477,46 @@ std::pair<int, int> Game::rollDiceForCurrentPlayer() {
     }
 
     Player& current = players[static_cast<size_t>(playerIdx)];
+
+    if (current.getStatus() == PlayerStatus::JAILED && current.getJailTurnsAttempted() >= 3) {
+        logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA",
+                   "Wajib bayar denda sebelum lempar dadu");
+        return {0, 0};
+    }
+
     auto result = dice.roll();
     int diceTotal = result.first + result.second;
+    const bool isDouble = dice.isDouble(result);
     setLastDiceTotal(diceTotal);
     hasRolledThisTurn = true;
+    extraRollPending = false;
     logger.log(turnManager.getCurrentTurn(), current.getUsername(), "DADU",
                to_string(result.first) + "+" + to_string(result.second) + "=" + to_string(diceTotal));
 
     if (current.getStatus() == PlayerStatus::JAILED) {
-        if (dice.isDouble(result)) {
+        if (isDouble) {
             current.releaseFromJail();
             logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA", "Keluar dengan double");
         } else {
             current.incrementJailAttempt();
-            if (current.getJailTurnsAttempted() >= 3) {
-                int fine = config.getSpecialConfig(JAIL_FINE);
-                payBankOrBankrupt(current, fine, "Denda penjara");
-                if (!current.isBankrupt()) {
-                    current.releaseFromJail();
-                }
-            }
+            logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA",
+                       "Gagal double percobaan " + to_string(current.getJailTurnsAttempted()) + "/3");
             return result;
         }
+    } else if (isDouble) {
+        current.addConsecutiveDouble();
+        if (current.getConsecutiveDoubleCount() >= 3) {
+            int jailIndex = board.getJailIndex();
+            if (jailIndex >= 0) {
+                current.moveTo(jailIndex);
+            }
+            current.enterJail();
+            logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA",
+                       "3 double berturut");
+            return result;
+        }
+    } else {
+        current.resetConsecutiveDouble();
     }
 
     bool passedGo = false;
@@ -443,6 +526,12 @@ std::pair<int, int> Game::rollDiceForCurrentPlayer() {
         awardGoSalary(current);
     }
     handleLanding(current);
+
+    if (isDouble && current.getStatus() == PlayerStatus::ACTIVE) {
+        extraRollPending = true;
+        logger.log(turnManager.getCurrentTurn(), current.getUsername(), "DADU",
+                   "Double, mendapat giliran ekstra");
+    }
 
     return result;
 }
@@ -683,6 +772,91 @@ bool Game::getHasRolledThisTurn() const {
     return hasRolledThisTurn;
 }
 
+bool Game::isExtraRollPending() const {
+    return extraRollPending;
+}
+
+bool Game::prepareExtraRollForCurrentPlayer() {
+    if (!extraRollPending || gameOver || players.empty()) {
+        return false;
+    }
+
+    int playerIdx = turnManager.getCurrentPlayerIndex();
+    if (playerIdx < 0 || playerIdx >= static_cast<int>(players.size())) {
+        return false;
+    }
+
+    Player& current = players[static_cast<size_t>(playerIdx)];
+    if (current.getStatus() != PlayerStatus::ACTIVE || current.isBankrupt()) {
+        extraRollPending = false;
+        return false;
+    }
+
+    hasRolledThisTurn = false;
+    extraRollPending = false;
+    logger.log(turnManager.getCurrentTurn(), current.getUsername(), "DADU",
+               "Giliran ekstra siap");
+    return true;
+}
+
+bool Game::payJailFineForCurrentPlayer() {
+    if (players.empty() || gameOver || hasRolledThisTurn) {
+        return false;
+    }
+
+    int playerIdx = turnManager.getCurrentPlayerIndex();
+    if (playerIdx < 0 || playerIdx >= static_cast<int>(players.size())) {
+        return false;
+    }
+
+    Player& current = players[static_cast<size_t>(playerIdx)];
+    if (current.getStatus() != PlayerStatus::JAILED) {
+        return false;
+    }
+
+    int fine = config.getSpecialConfig(JAIL_FINE);
+    payBankOrBankrupt(current, fine, "Denda penjara");
+    if (current.isBankrupt()) {
+        return false;
+    }
+
+    current.releaseFromJail();
+    logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA",
+               "Keluar dengan bayar denda M" + to_string(fine));
+    return true;
+}
+
+bool Game::useJailFreeCardForCurrentPlayer() {
+    if (players.empty() || gameOver || hasRolledThisTurn) {
+        return false;
+    }
+
+    int playerIdx = turnManager.getCurrentPlayerIndex();
+    if (playerIdx < 0 || playerIdx >= static_cast<int>(players.size())) {
+        return false;
+    }
+
+    Player& current = players[static_cast<size_t>(playerIdx)];
+    if (current.getStatus() != PlayerStatus::JAILED) {
+        return false;
+    }
+
+    const auto& hand = current.getHandCards();
+    for (size_t i = 0; i < hand.size(); ++i) {
+        if (dynamic_cast<JailFreeCard*>(hand[i].get()) != nullptr ||
+            hand[i]->getName() == "JailFreeCard") {
+            std::unique_ptr<AbilityCard> card = current.dropCard(static_cast<int>(i));
+            card->use(&current, this);
+            cardManager.discardAbilityCard(std::move(card));
+            logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA",
+                       "Keluar dengan kartu Bebas dari Penjara");
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void Game::checkWinCondition() {
     int active = 0;
     for (const Player& p : players) {
@@ -719,7 +893,9 @@ void Game::executeCommand(const std::string& command) {
     if (command == "LEMPAR_DADU") {
         rollDiceForCurrentPlayer();
     } else if (command == "AKHIRI_GILIRAN") {
-        endCurrentTurn();
+        if (!prepareExtraRollForCurrentPlayer()) {
+            endCurrentTurn();
+        }
     } else if (command == "BELI") {
         buyCurrentProperty();
     }
