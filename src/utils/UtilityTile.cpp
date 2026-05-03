@@ -12,6 +12,10 @@ UtilityTile::UtilityTile(
 
 int UtilityTile::calculateRent(Player* visitor, Game* game) {
     (void) visitor;
+    if (isMortgaged()) {
+        return 0;
+    }
+
     int ownedUtilityCount = 1;
     if (owner != nullptr) {
         ownedUtilityCount = 0;

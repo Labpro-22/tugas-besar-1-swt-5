@@ -24,11 +24,19 @@ int BankruptcyManager::estimateMaxLiquidationValue(Player& player) const {
     int totalValue = player.getMoney();
 
     for (const PropertyTile* prop : player.getOwnedProperties()) {
+        if (prop->isMortgaged()) {
+            continue;
+        }
+
         totalValue += prop->getLandPrice();
         
         const StreetTile* street = dynamic_cast<const StreetTile*>(prop);
         if (street != nullptr) {
-            totalValue += (street->getBuildingLevel() * street->getHouseBuildCost()) / 2;
+            int buildingValue = street->getHouseCount() * street->getHouseBuildCost();
+            if (street->hasHotelBuilt()) {
+                buildingValue += street->getHotelBuildCost();
+            }
+            totalValue += buildingValue / 2;
         }
     }
     return totalValue;

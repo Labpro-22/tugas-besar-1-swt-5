@@ -37,9 +37,8 @@ StreetTile::StreetTile(int id, std::string code, std::string name,
 
 int StreetTile::calculateRent(Player* visitor, Game* game) {
     (void) visitor;
-    (void) game;
 
-    if (rentTable.empty()) {
+    if (isMortgaged() || rentTable.empty()) {
         return 0;
     }
 

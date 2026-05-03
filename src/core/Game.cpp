@@ -56,6 +56,39 @@ std::string propertySummaryLine(PropertyTile* property, Game& game) {
     }
     return oss.str();
 }
+
+std::vector<StreetTile*> collectMutableStreetGroup(Game& game, const std::string& colorGroup) {
+    std::vector<StreetTile*> group;
+
+    for (Tile* tile : game.getBoard().getTiles()) {
+        StreetTile* street = dynamic_cast<StreetTile*>(tile);
+        if (street != nullptr && street->getColorGroup() == colorGroup) {
+            group.push_back(street);
+        }
+    }
+
+    return group;
+}
+
+int sellColorGroupBuildingsToBank(Game& game, Player& player, StreetTile& selected) {
+    int total = 0;
+    const std::vector<StreetTile*> group = collectMutableStreetGroup(game, selected.getColorGroup());
+
+    for (StreetTile* street : group) {
+        if (street == nullptr || street->getOwner() != &player || street->getBuildingLevel() == 0) {
+            continue;
+        }
+
+        const int funds = street->sellBuildingsToBank();
+        total += funds;
+        player.receive(funds);
+        game.getLogger().log(game.getTurnManager().getCurrentTurn(),
+                             player.getUsername(), "JUAL_BANGUNAN",
+                             street->getName() + " M" + to_string(funds));
+    }
+
+    return total;
+}
 }
 
 Game::Game()
@@ -343,7 +376,21 @@ bool Game::mortgageProperty(const std::string& code) {
 
     Player& current = players[static_cast<size_t>(playerIdx)];
     PropertyTile* pt = dynamic_cast<PropertyTile*>(board.getTileByCode(code));
-    if (pt == nullptr || pt->getOwner() != &current || pt->isMortgaged() || !pt->canBeMortgaged(this)) {
+    if (pt == nullptr || pt->getOwner() != &current || pt->getStatus() != OWNED) {
+        return false;
+    }
+
+    StreetTile* street = dynamic_cast<StreetTile*>(pt);
+    if (street != nullptr) {
+        const int buildingFunds = sellColorGroupBuildingsToBank(*this, current, *street);
+        if (buildingFunds > 0) {
+            logger.log(turnManager.getCurrentTurn(), current.getUsername(), "GADAI",
+                       "Bangunan color group " + street->getColorGroup() +
+                       " dijual M" + to_string(buildingFunds));
+        }
+    }
+
+    if (!pt->canBeMortgaged(this)) {
         return false;
     }
 
@@ -622,14 +669,19 @@ void liquidateAutomatically(Player& player, Game& game, int amount) {
 
         StreetTile* street = dynamic_cast<StreetTile*>(prop);
         if (street != nullptr && street->getBuildingLevel() > 0) {
-            int funds = street->sellBuildingsToBank();
-            player.receive(funds);
+            int funds = sellColorGroupBuildingsToBank(game, player, *street);
             game.getLogger().log(game.getTurnManager().getCurrentTurn(),
                                  player.getUsername(), "LIKUIDASI",
-                                 "Jual bangunan " + prop->getName() + " M" + to_string(funds));
+                                 "Jual bangunan color group " + street->getColorGroup() +
+                                 " M" + to_string(funds));
         }
 
-        if (!player.canAfford(amount) && !prop->isMortgaged() && prop->canBeMortgaged(&game)) {
+        if (!player.canAfford(amount) && prop->getStatus() == OWNED) {
+            StreetTile* street = dynamic_cast<StreetTile*>(prop);
+            if (street != nullptr && !prop->canBeMortgaged(&game)) {
+                continue;
+            }
+
             int funds = prop->mortgage();
             player.receive(funds);
             game.getLogger().log(game.getTurnManager().getCurrentTurn(),

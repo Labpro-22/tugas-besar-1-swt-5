@@ -547,6 +547,107 @@ namespace {
         return lines;
     }
 
+    int buildingSaleValue(const StreetTile* street) {
+        if (street == nullptr) {
+            return 0;
+        }
+
+        int total = street->getHouseCount() * street->getHouseBuildCost();
+        if (street->hasHotelBuilt()) {
+            total += street->getHotelBuildCost();
+        }
+
+        return total / 2;
+    }
+
+    std::vector<std::string> buildMortgageOptionsLines(Game* game) {
+        std::vector<std::string> lines;
+        if (game == nullptr || game->getBoard().size() == 0) {
+            return lines;
+        }
+
+        const int playerIndex = game->getTurnManager().getCurrentPlayerIndex();
+        if (playerIndex < 0 || playerIndex >= static_cast<int>(game->getPlayers().size())) {
+            return lines;
+        }
+
+        Player& current = game->getPlayer(playerIndex);
+        lines.push_back("=== Properti yang Dapat Digadaikan ===");
+
+        int number = 1;
+        for (PropertyTile* property : current.getOwnedProperties()) {
+            if (property == nullptr || property->getStatus() != OWNED) {
+                continue;
+            }
+
+            std::string group = "LAINNYA";
+            const StreetTile* street = dynamic_cast<const StreetTile*>(property);
+            if (street != nullptr) {
+                group = displayName(street->getColorGroup());
+            } else if (dynamic_cast<const RailroadTile*>(property) != nullptr) {
+                group = "STASIUN";
+            } else if (dynamic_cast<const UtilityTile*>(property) != nullptr) {
+                group = "UTILITY";
+            }
+
+            std::string row =
+                std::to_string(number) + ". " + displayName(property->getName()) +
+                " (" + property->getCode() + ") [" + group + "] Nilai Gadai: " +
+                formatMoney(property->getMortgageValue());
+
+            if (street != nullptr && !street->canBeMortgaged(game)) {
+                row += " (bangunan color group akan dijual terlebih dahulu)";
+            }
+
+            lines.push_back(row);
+            ++number;
+        }
+
+        if (number == 1) {
+            return {"Tidak ada properti yang dapat digadaikan saat ini."};
+        }
+
+        lines.push_back("Pilih petak properti, lalu tekan Gadai.");
+        return lines;
+    }
+
+    std::vector<std::string> buildMortgageBuildingSaleLines(Game* game, StreetTile* selected) {
+        std::vector<std::string> lines;
+        if (game == nullptr || selected == nullptr) {
+            return lines;
+        }
+
+        const int playerIndex = game->getTurnManager().getCurrentPlayerIndex();
+        if (playerIndex < 0 || playerIndex >= static_cast<int>(game->getPlayers().size())) {
+            return lines;
+        }
+
+        Player& current = game->getPlayer(playerIndex);
+        const std::vector<const StreetTile*> group = collectStreetGroup(game, selected->getColorGroup());
+        std::vector<std::string> saleLines;
+
+        for (const StreetTile* street : group) {
+            if (street == nullptr || street->getOwner() != &current || street->getBuildingLevel() == 0) {
+                continue;
+            }
+
+            saleLines.push_back(
+                "Bangunan " + displayName(street->getName()) +
+                " terjual. Kamu menerima " + formatMoney(buildingSaleValue(street)) + "."
+            );
+        }
+
+        if (saleLines.empty()) {
+            return lines;
+        }
+
+        lines.push_back(displayName(selected->getName()) + " memiliki bangunan di color group [" +
+                        displayName(selected->getColorGroup()) + "].");
+        lines.push_back("Bangunan dijual terlebih dahulu dalam aksi Gadai ini.");
+        lines.insert(lines.end(), saleLines.begin(), saleLines.end());
+        return lines;
+    }
+
     std::vector<std::string> buildAuctionResultLines(AuctionManager& auction) {
         PropertyTile* property = auction.getLastProperty();
         Player* winner = auction.getLastWinner();
@@ -775,19 +876,39 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
 
             std::string code;
             if (!selectedPropertyCode(g, code)) {
-                showOverlay("Gadai Gagal", {"Pilih petak properti terlebih dahulu."});
+                showOverlay("Gadai", buildMortgageOptionsLines(g));
                 return;
             }
 
+            Tile* selected = g->getBoard().getTileByIndex(selectedTile);
+            PropertyTile* property = dynamic_cast<PropertyTile*>(selected);
+            StreetTile* street = dynamic_cast<StreetTile*>(property);
+            const int playerIndex = g->getTurnManager().getCurrentPlayerIndex();
+            if (property == nullptr || playerIndex < 0 ||
+                playerIndex >= static_cast<int>(g->getPlayers().size())) {
+                showOverlay("Gadai Gagal", {"Pilih properti milik pemain aktif yang belum digadaikan."});
+                return;
+            }
+
+            Player& current = g->getPlayer(playerIndex);
+            const int mortgageValue = property->getMortgageValue();
+            std::vector<std::string> resultLines = buildMortgageBuildingSaleLines(g, street);
             bool ok = g->mortgageProperty(code);
+
+            if (ok) {
+                resultLines.push_back(displayName(property->getName()) + " berhasil digadaikan.");
+                resultLines.push_back("Kamu menerima " + formatMoney(mortgageValue) + " dari Bank.");
+                resultLines.push_back("Uang kamu sekarang: " + formatMoney(current.getMoney()));
+                resultLines.push_back("Catatan: Sewa tidak dapat dipungut dari properti yang digadaikan.");
+            } else {
+                resultLines.push_back("Pilih properti milik pemain aktif yang belum digadaikan.");
+                const std::vector<std::string> options = buildMortgageOptionsLines(g);
+                resultLines.insert(resultLines.end(), options.begin(), options.end());
+            }
 
             showOverlay(
                 ok ? "Gadai Berhasil" : "Gadai Gagal",
-                {
-                    ok
-                        ? "Properti " + code + " berhasil digadaikan."
-                        : "Pilih properti milik pemain aktif yang belum digadaikan."
-                }
+                resultLines
             );
         }},
 

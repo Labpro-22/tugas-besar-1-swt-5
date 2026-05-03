@@ -13,6 +13,10 @@ RailroadTile::RailroadTile(
 int RailroadTile::calculateRent(Player* visitor, Game* game) {
     (void) visitor;
     (void) game;
+    if (isMortgaged()) {
+        return 0;
+    }
+
     int ownedRailroadCount = 1;
     if (owner != nullptr) {
         ownedRailroadCount = 0;
