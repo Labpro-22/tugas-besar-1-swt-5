@@ -588,6 +588,7 @@ std::unique_ptr<AbilityCard> GameStateLoader::createAbilityCard(const std::strin
     if (name == "TeleportCard") return std::make_unique<TeleportCard>();
     if (name == "LassoCard") return std::make_unique<LassoCard>();
     if (name == "DemolitionCard") return std::make_unique<DemolitionCard>();
+    if (name == "JailFreeCard") return std::make_unique<JailFreeCard>();
 
     if (name == "MoveCard")
     {

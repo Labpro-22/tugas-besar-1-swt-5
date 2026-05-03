@@ -29,6 +29,10 @@ AbilityCardDeck::AbilityCardDeck() {
     {
         drawPile.push_back(std::make_unique<DemolitionCard>());
     }
+    for (size_t i = 0; i < 2; i++)
+    {
+        drawPile.push_back(std::make_unique<JailFreeCard>());
+    }
 }
 
 AbilityCardDeck::AbilityCardDeck(std::vector<std::unique_ptr<AbilityCard>> drawPile,

@@ -60,3 +60,11 @@ public:
     void use(Player* target, Game* game) override;
     std::string serialize() const override;
 };
+
+class JailFreeCard : public AbilityCard
+{
+public:
+    JailFreeCard();
+    void use(Player* target, Game* game) override;
+    std::string serialize() const override;
+};

@@ -309,3 +309,32 @@ std::string DemolitionCard::serialize() const
 {
     return serializeCommonAbilityFields(name, description);
 }
+
+// ========================================================
+// JailFreeCard
+// ========================================================
+
+JailFreeCard::JailFreeCard()
+    : AbilityCard("JailFreeCard", "Bebas dari Penjara.") {}
+
+void JailFreeCard::use(Player* target, Game* game)
+{
+    (void)game;
+
+    if (target == nullptr)
+    {
+        throw InvalidActionException("JAIL FREE TARGET TIDAK VALID");
+    }
+
+    if (target->getStatus() != PlayerStatus::JAILED)
+    {
+        throw InvalidActionException("PEMAIN TIDAK SEDANG DI PENJARA");
+    }
+
+    target->releaseFromJail();
+}
+
+std::string JailFreeCard::serialize() const
+{
+    return serializeCommonAbilityFields(name, description);
+}
