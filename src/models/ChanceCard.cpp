@@ -30,6 +30,15 @@ RailroadCard::RailroadCard() : ChanceCard(
 GoToJailCard::GoToJailCard() : ChanceCard(
     "Masuk Penjara.",
     [](Player* p, Game* g) {
+        if (p->isShieldActive()) {
+            g->getLogger().log(
+                g->getTurnManager().getCurrentTurn(),
+                p->getUsername(),
+                "SHIELD",
+                "Terlindung dari penjara"
+            );
+            return;
+        }
         Board& board = g->getBoard();
         int jailIndex = board.getJailIndex();
         p->moveTo(jailIndex);

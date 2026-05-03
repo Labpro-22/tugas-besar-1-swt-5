@@ -48,6 +48,7 @@ SRCS := \
     $(SRC_DIR)/core/Game.cpp \
     $(SRC_DIR)/core/GameException.cpp \
     $(SRC_DIR)/core/GameManager.cpp \
+    $(SRC_DIR)/core/HandOverflowException.cpp \
     $(SRC_DIR)/core/InsufficientFundException.cpp \
     $(SRC_DIR)/core/InvalidAuctionException.cpp \
     $(SRC_DIR)/core/LiquidationManager.cpp \

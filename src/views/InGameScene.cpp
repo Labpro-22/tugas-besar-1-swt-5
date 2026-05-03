@@ -14,6 +14,7 @@
 #include "../../include/utils/UtilityTile.hpp"
 #include "../../include/utils/LogEntry.hpp"
 #include "../../include/core/TurnManager.hpp"
+#include "../../include/core/HandOverflowException.hpp"
 #include "../../include/utils/Logger.hpp"
 #include "raylib.h"
 #include <algorithm>
@@ -590,6 +591,10 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
       diceCancelButton("Batal", kDanger, {255,255,255,255}),
       openLogButton("Buka Log", kAccentAlt, {255,255,255,255}),
       closeLogButton("X", kDanger, {255,255,255,255}),
+      closeCardButton("Tutup", kPanelBorder, kText),
+      useCardButton("Pakai", kAccentAlt, {255,255,255,255}),
+      discardCardButton("Buang", kDanger, {255,255,255,255}),
+      cancelLassoTargetButton("Batal", kPanelBorder, kText),
       auctionBidButton("Bid", kAccentAlt, {255,255,255,255}),
       auctionPassButton("Pass", kDanger, {255,255,255,255}),
       auctionCloseButton("Tutup", kAccentAlt, {255,255,255,255}),
@@ -617,6 +622,13 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
       diceModalVis(0),
       showLogModal(false),
       logModalVis(0),
+      showCardModal(false),
+      cardOverflowMode(false),
+      selectedCardIndex(-1),
+      cardModalVis(0),
+      showLassoTargetModal(false),
+      pendingLassoCardIndex(-1),
+      lassoTargetModalVis(0),
       propertyDecisionPending(false),
       propertyDecisionResolved(false),
       pendingProperty(nullptr),
@@ -657,6 +669,18 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
         {"Dadu", [this]() {
             Game* g = gameManager->getCurrentGame();
             if (g == nullptr || g->isGameOver()) return;
+
+            refreshPropertyDecisionState();
+            if (hasBlockingPropertyDecision()) {
+                showOverlay(
+                    "Pilih Aksi Properti",
+                    {
+                        "Properti " + displayName(pendingProperty->getName()) + " (" + pendingProperty->getCode() + ") belum diproses.",
+                        "Pilih Beli atau Lelang sebelum melempar dadu."
+                    }
+                );
+                return;
+            }
 
             if (g->getHasRolledThisTurn()) {
                 return;
@@ -718,8 +742,12 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             int idx = g->getTurnManager().getCurrentPlayerIndex();
             if (idx < 0 || idx >= static_cast<int>(g->getPlayers().size())) return;
             Player& current = g->getPlayer(idx);
+            int amount = pendingProperty->getLandPrice();
+            if (current.getDiscountDuration() > 0) {
+                amount = amount * (100 - current.getDiscountPercent()) / 100;
+            }
 
-            if (!current.canAfford(pendingProperty->getLandPrice())) {
+            if (!current.canAfford(amount)) {
                 startAuctionForProperty(pendingProperty, "Uang pemain tidak cukup untuk membeli properti.");
                 return;
             }
@@ -916,28 +944,7 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
         }},
 
         {"Kartu", [this]() {
-            Game* g = gameManager->getCurrentGame();
-            if (g == nullptr) return;
-
-            int idx = g->getTurnManager().getCurrentPlayerIndex();
-            if (idx < 0 || idx >= static_cast<int>(g->getPlayers().size())) return;
-
-            Player& p = g->getPlayer(idx);
-            std::vector<std::string> lines;
-
-            for (const auto& c : p.getHandCards()) {
-                lines.push_back(c->getName() + " - " + c->getDescription());
-            }
-
-            if (lines.empty()) {
-                lines.push_back("(tidak ada kartu kemampuan)");
-            }
-
-            showOverlay(
-                "Kartu Kemampuan",
-                lines,
-                "Gunakan command/fitur kartu sesuai implementasi AbilityCard."
-            );
+            openCardModal(false);
         }},
 
         {"Festival", [this]() {
@@ -1038,14 +1045,6 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             Game* g = gameManager->getCurrentGame();
             if (g == nullptr || g->isGameOver()) return;
 
-            if (!g->getHasRolledThisTurn()) {
-                showOverlay(
-                    "Giliran Belum Selesai",
-                    {"Silakan lempar dadu sebelum mengakhiri giliran."}
-                );
-                return;
-            }
-
             refreshPropertyDecisionState();
             if (g->getAuctionManager().isAuctionActive() || showAuctionModal) {
                 showAuctionModal = true;
@@ -1076,6 +1075,14 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
                 return;
             }
 
+            if (!g->getHasRolledThisTurn()) {
+                showOverlay(
+                    "Giliran Belum Selesai",
+                    {"Silakan lempar dadu sebelum mengakhiri giliran."}
+                );
+                return;
+            }
+
             if (g->isExtraRollPending()) {
                 if (g->prepareExtraRollForCurrentPlayer()) {
                     propertyDecisionPending = false;
@@ -1092,7 +1099,16 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
                 }
             }
 
-            g->endTurn();
+            try {
+                g->endTurn();
+            } catch (const HandOverflowException& e) {
+                propertyDecisionPending = false;
+                propertyDecisionResolved = false;
+                pendingProperty = nullptr;
+                openCardModal(true);
+                cardError = e.getMessage();
+                return;
+            }
 
             propertyDecisionPending = false;
             propertyDecisionResolved = false;
@@ -1231,6 +1247,32 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
         showLogModal = false;
     });
 
+    closeCardButton.setOnClick([this]() {
+        if (cardOverflowMode) {
+            cardError = "Buang satu kartu terlebih dahulu.";
+            return;
+        }
+
+        showCardModal = false;
+        selectedCardIndex = -1;
+        cardError.clear();
+    });
+
+    useCardButton.setOnClick([this]() {
+        onUseSelectedCard();
+    });
+
+    discardCardButton.setOnClick([this]() {
+        onDiscardSelectedCard();
+    });
+
+    cancelLassoTargetButton.setOnClick([this]() {
+        showLassoTargetModal = false;
+        lassoTargetPlayerIds.clear();
+        lassoTargetButtons.clear();
+        pendingLassoCardIndex = -1;
+    });
+
     auctionBidButton.setOnClick([this]() {
         onAuctionBid();
     });
@@ -1281,6 +1323,16 @@ void InGameScene::onEnter() {
     diceError.clear();
     showLogModal = false;
     logModalVis = 0;
+    showCardModal = false;
+    cardOverflowMode = false;
+    selectedCardIndex = -1;
+    cardError.clear();
+    cardModalVis = 0;
+    showLassoTargetModal = false;
+    lassoTargetPlayerIds.clear();
+    lassoTargetButtons.clear();
+    pendingLassoCardIndex = -1;
+    lassoTargetModalVis = 0;
     propertyDecisionPending = false;
     propertyDecisionResolved = false;
     pendingProperty = nullptr;
@@ -1309,6 +1361,18 @@ void InGameScene::onEnter() {
 void InGameScene::rollDiceAndShowResult() {
     Game* g = gameManager->getCurrentGame();
     if (g == nullptr || g->isGameOver()) return;
+
+    refreshPropertyDecisionState();
+    if (hasBlockingPropertyDecision()) {
+        showOverlay(
+            "Pilih Aksi Properti",
+            {
+                "Properti " + displayName(pendingProperty->getName()) + " (" + pendingProperty->getCode() + ") belum diproses.",
+                "Pilih Beli atau Lelang sebelum melempar dadu."
+            }
+        );
+        return;
+    }
 
     if (g->getHasRolledThisTurn()) {
         showOverlay("Dadu", {"Dadu sudah digunakan pada giliran ini."});
@@ -1433,13 +1497,6 @@ void InGameScene::refreshPropertyDecisionState() {
         return;
     }
 
-    if (!g->getHasRolledThisTurn()) {
-        propertyDecisionPending = false;
-        propertyDecisionResolved = false;
-        pendingProperty = nullptr;
-        return;
-    }
-
     if (propertyDecisionPending) {
         if (pendingProperty == nullptr || pendingProperty->getStatus() != BANK) {
             propertyDecisionPending = false;
@@ -1458,7 +1515,7 @@ void InGameScene::refreshPropertyDecisionState() {
         return;
     }
 
-    PropertyTile* property = dynamic_cast<PropertyTile*>(
+    StreetTile* property = dynamic_cast<StreetTile*>(
         g->getBoard().getTileByIndex(g->getPlayer(idx).getPosition())
     );
 
@@ -1878,6 +1935,8 @@ void InGameScene::updateAnimations(const Rectangle& br){
     saveModalVis = ease(saveModalVis, showSaveModal ? 1.f : 0.f, dt * 8);
     diceModalVis = ease(diceModalVis, showDiceModal ? 1.f : 0.f, dt * 8);
     logModalVis = ease(logModalVis, showLogModal ? 1.f : 0.f, dt * 8);
+    cardModalVis = ease(cardModalVis, showCardModal ? 1.f : 0.f, dt * 8);
+    lassoTargetModalVis = ease(lassoTargetModalVis, showLassoTargetModal ? 1.f : 0.f, dt * 8);
     auctionModalVis = ease(auctionModalVis, showAuctionModal ? 1.f : 0.f, dt * 8);
     tradeModalVis = ease(tradeModalVis, showTradeModal ? 1.f : 0.f, dt * 8);
 }
@@ -1892,6 +1951,14 @@ void InGameScene::update(){
     for(int i=0;i<tileCount;++i) tileRects.push_back(getTileRect(br,i));
     updateAnimations(br);
     if (IsKeyPressed(KEY_ESCAPE)) {
+        if (showLassoTargetModal) {
+            showLassoTargetModal = false;
+            lassoTargetPlayerIds.clear();
+            lassoTargetButtons.clear();
+            pendingLassoCardIndex = -1;
+            return;
+        }
+
         if (showAuctionModal && auctionNoticeMode) {
             finishAuctionNotice();
             return;
@@ -1910,6 +1977,17 @@ void InGameScene::update(){
 
         if (showLogModal) {
             showLogModal = false;
+            return;
+        }
+
+        if (showCardModal) {
+            if (cardOverflowMode) {
+                cardError = "Buang satu kartu terlebih dahulu.";
+            } else {
+                showCardModal = false;
+                selectedCardIndex = -1;
+                cardError.clear();
+            }
             return;
         }
 
@@ -1935,6 +2013,8 @@ void InGameScene::update(){
     }
 
     bool noModalActive = saveModalVis < .02f && diceModalVis < .02f && logModalVis < .02f &&
+                         cardModalVis < .02f &&
+                         lassoTargetModalVis < .02f &&
                          auctionModalVis < .02f && tradeModalVis < .02f && overlayVis < .02f;
 
     if (noModalActive && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
@@ -2134,6 +2214,104 @@ void InGameScene::update(){
         closeLogButton.update();
     }
 
+    if (cardModalVis > .01f) {
+        Rectangle p{
+            sr.width * .5f - 360,
+            sr.height * .5f - 300 + (1 - cardModalVis) * 24,
+            720,
+            600
+        };
+
+        closeCardButton.setBoundary({
+            p.x + p.width - 188,
+            p.y + p.height - 70,
+            140,
+            50
+        });
+
+        discardCardButton.setBoundary({
+            p.x + p.width - 354,
+            p.y + p.height - 70,
+            140,
+            50
+        });
+
+        useCardButton.setBoundary({
+            p.x + p.width - 520,
+            p.y + p.height - 70,
+            140,
+            50
+        });
+
+        Game* currentGame = gameManager->getCurrentGame();
+        int handSize = 0;
+        if (currentGame != nullptr) {
+            int idx = currentGame->getTurnManager().getCurrentPlayerIndex();
+            if (idx >= 0 && idx < static_cast<int>(currentGame->getPlayers().size())) {
+                handSize = static_cast<int>(currentGame->getPlayer(idx).getHandCards().size());
+            }
+        }
+
+        if (selectedCardIndex >= handSize) {
+            selectedCardIndex = handSize - 1;
+        }
+
+        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+            Vector2 m = GetMousePosition();
+            for (int i = 0; i < handSize; ++i) {
+                Rectangle row{
+                    p.x + 24,
+                    p.y + 104 + i * 82.0f,
+                    p.width - 48,
+                    68
+                };
+
+                if (CheckCollisionPointRec(m, row)) {
+                    selectedCardIndex = i;
+                    cardError.clear();
+                    break;
+                }
+            }
+        }
+
+        useCardButton.disabled = cardOverflowMode || selectedCardIndex < 0 || handSize == 0 ||
+            (currentGame != nullptr && currentGame->getHasRolledThisTurn());
+        discardCardButton.disabled = selectedCardIndex < 0 || handSize == 0;
+
+        if (!cardOverflowMode) {
+            useCardButton.update();
+        }
+        discardCardButton.update();
+        closeCardButton.update();
+    }
+
+    if (lassoTargetModalVis > .01f) {
+        Rectangle p{
+            sr.width * .5f - 250,
+            sr.height * .5f - 190 + (1 - lassoTargetModalVis) * 24,
+            500,
+            380
+        };
+
+        for (std::size_t i = 0; i < lassoTargetButtons.size(); ++i) {
+            lassoTargetButtons[i].setBoundary({
+                p.x + 34,
+                p.y + 102 + static_cast<float>(i) * 58.0f,
+                p.width - 68,
+                46
+            });
+            lassoTargetButtons[i].update();
+        }
+
+        cancelLassoTargetButton.setBoundary({
+            p.x + p.width - 174,
+            p.y + p.height - 66,
+            140,
+            46
+        });
+        cancelLassoTargetButton.update();
+    }
+
     if (auctionModalVis > .01f) {
         Rectangle p{
             sr.width * .5f - 330,
@@ -2273,7 +2451,25 @@ void InGameScene::drawCenterPanel(const Rectangle& br){
     DrawRectangleRoundedLinesEx(ctr,.05f,10,3,Fade(kAccentAlt,.6f));
     Rectangle rib{ctr.x+ctr.width*.25f,ctr.y+ctr.height*.42f,ctr.width*.5f,68};
     DrawRectanglePro({rib.x+rib.width*.5f,rib.y+rib.height*.5f,rib.width,rib.height},{rib.width*.5f,rib.height*.5f},-22,kAccent);
-    DrawText("NIMONSPOLI",int(ctr.x+ctr.width*.27f),int(ctr.y+ctr.height*.43f),38,kText);
+    const char* title = "NIMONSPOLI";
+    const int titleSize = 38;
+    const float titleAngle = -22.0f * 3.14159265f / 180.0f;
+    float titleX = rib.x + (rib.width - MeasureText(title, titleSize)) * .5f;
+    float titleCenterX = rib.x + rib.width * .5f;
+    float titleCenterY = rib.y + rib.height * .5f - titleSize * .5f;
+
+    for (const char* ch = title; *ch != '\0'; ++ch) {
+        char letter[2] = {*ch, '\0'};
+        float offsetX = titleX - titleCenterX;
+        DrawText(
+            letter,
+            static_cast<int>(titleX),
+            static_cast<int>(titleCenterY + offsetX * std::tan(titleAngle)),
+            titleSize,
+            kText
+        );
+        titleX += MeasureText(letter, titleSize) + 4;
+    }
     drawSmallFlower(ctr.x+ctr.width*.5f,ctr.y+ctr.height*.72f,20,sceneTime*.6f,.4f);
 }
 
@@ -2833,6 +3029,366 @@ void InGameScene::drawLogModal(Rectangle sr) {
     }
 }
 
+void InGameScene::openCardModal(bool overflowMode) {
+    showCardModal = true;
+    cardOverflowMode = overflowMode;
+    selectedCardIndex = -1;
+    cardError.clear();
+    overlayOpen = false;
+    showLogModal = false;
+}
+
+void InGameScene::onUseSelectedCard() {
+    if (cardOverflowMode) return;
+
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr || selectedCardIndex < 0) {
+        cardError = "Pilih kartu terlebih dahulu.";
+        return;
+    }
+
+    refreshPropertyDecisionState();
+    if (hasBlockingPropertyDecision()) {
+        cardError = "Pilih Beli atau Lelang untuk properti saat ini terlebih dahulu.";
+        return;
+    }
+
+    int currentIdx = g->getTurnManager().getCurrentPlayerIndex();
+    if (currentIdx < 0 || currentIdx >= static_cast<int>(g->getPlayers().size())) {
+        cardError = "Pemain aktif tidak valid.";
+        return;
+    }
+
+    Player& current = g->getPlayer(currentIdx);
+    const auto& hand = current.getHandCards();
+    if (selectedCardIndex >= static_cast<int>(hand.size())) {
+        cardError = "Kartu tidak valid.";
+        return;
+    }
+
+    const std::string cardName = hand[static_cast<size_t>(selectedCardIndex)]->getName();
+
+    try {
+        bool ok = false;
+
+        if (cardName == "TeleportCard") {
+            ok = g->useCurrentPlayerTeleportCard(selectedCardIndex, selectedTile);
+            if (!ok) {
+                cardError = "Pilih petak tujuan yang valid sebelum memakai TeleportCard.";
+                return;
+            }
+        } else if (cardName == "DemolitionCard") {
+            ok = g->useCurrentPlayerDemolitionCard(selectedCardIndex, selectedTile);
+            if (!ok) {
+                cardError = "Pilih street milik lawan sebelum memakai DemolitionCard.";
+                return;
+            }
+        } else if (cardName == "LassoCard") {
+            std::vector<int> targets;
+            for (Player& player : g->getPlayers()) {
+                if (
+                    player.getId() != current.getId() &&
+                    !player.isBankrupt() &&
+                    player.getPosition() == selectedTile
+                ) {
+                    targets.push_back(player.getId());
+                }
+            }
+
+            if (targets.empty()) {
+                cardError = "Pilih petak yang berisi pemain lawan untuk LassoCard.";
+                return;
+            }
+
+            if (targets.size() > 1U) {
+                openLassoTargetModal(targets);
+                return;
+            }
+
+            ok = g->useCurrentPlayerLassoCard(selectedCardIndex, targets[0]);
+            if (!ok) {
+                cardError = "LassoCard tidak bisa dipakai pada target itu.";
+                return;
+            }
+        } else {
+            ok = g->useCurrentPlayerAbilityCard(selectedCardIndex);
+        }
+
+        if (!ok) {
+            cardError = "Kartu tidak bisa dipakai saat ini.";
+            return;
+        }
+    } catch (const std::exception& e) {
+        cardError = e.what();
+        return;
+    }
+
+    propertyDecisionResolved = false;
+    refreshPropertyDecisionState();
+    selectedCardIndex = -1;
+    showCardModal = false;
+    cardError.clear();
+}
+
+void InGameScene::onDiscardSelectedCard() {
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr || selectedCardIndex < 0) {
+        cardError = "Pilih kartu terlebih dahulu.";
+        return;
+    }
+
+    if (!g->discardCurrentPlayerAbilityCard(selectedCardIndex)) {
+        cardError = "Kartu tidak bisa dibuang.";
+        return;
+    }
+
+    int handSize = 0;
+    int idx = g->getTurnManager().getCurrentPlayerIndex();
+    if (idx >= 0 && idx < static_cast<int>(g->getPlayers().size())) {
+        handSize = static_cast<int>(g->getPlayer(idx).getHandCards().size());
+    }
+
+    if (handSize <= 3) {
+        cardOverflowMode = false;
+    }
+
+    selectedCardIndex = handSize > 0 ? std::min(selectedCardIndex, handSize - 1) : -1;
+    cardError.clear();
+
+    if (!cardOverflowMode && handSize == 0) {
+        showCardModal = false;
+    }
+}
+
+void InGameScene::openLassoTargetModal(const std::vector<int>& targetPlayerIds) {
+    lassoTargetPlayerIds = targetPlayerIds;
+    lassoTargetButtons.clear();
+    pendingLassoCardIndex = selectedCardIndex;
+    showLassoTargetModal = true;
+    cardError.clear();
+
+    Game* g = gameManager->getCurrentGame();
+
+    for (int playerId : lassoTargetPlayerIds) {
+        std::string label = "Pemain " + std::to_string(playerId);
+        if (g != nullptr) {
+            for (Player& player : g->getPlayers()) {
+                if (player.getId() == playerId) {
+                    label = player.getUsername();
+                    break;
+                }
+            }
+        }
+
+        Button button(label, kAccentAlt, {255,255,255,255});
+        button.setOnClick([this, playerId]() {
+            onLassoTargetSelected(playerId);
+        });
+        lassoTargetButtons.push_back(button);
+    }
+}
+
+void InGameScene::onLassoTargetSelected(int targetPlayerId) {
+    Game* g = gameManager->getCurrentGame();
+    if (g == nullptr || pendingLassoCardIndex < 0) {
+        showLassoTargetModal = false;
+        cardError = "Target Lasso tidak valid.";
+        return;
+    }
+
+    try {
+        if (!g->useCurrentPlayerLassoCard(pendingLassoCardIndex, targetPlayerId)) {
+            cardError = "LassoCard tidak bisa dipakai pada target itu.";
+            return;
+        }
+    } catch (const std::exception& e) {
+        cardError = e.what();
+        return;
+    }
+
+    showLassoTargetModal = false;
+    lassoTargetPlayerIds.clear();
+    lassoTargetButtons.clear();
+    pendingLassoCardIndex = -1;
+    propertyDecisionResolved = false;
+    refreshPropertyDecisionState();
+    selectedCardIndex = -1;
+    showCardModal = false;
+    cardError.clear();
+}
+
+void InGameScene::drawCardModal(Rectangle sr) {
+    if (cardModalVis <= .01f || !showCardModal) return;
+
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(kText, .38f * cardModalVis));
+
+    Rectangle p{
+        sr.width * .5f - 360,
+        sr.height * .5f - 300 + (1 - cardModalVis) * 24,
+        720,
+        600
+    };
+
+    DrawRectangleRounded({p.x + 5, p.y + 9, p.width, p.height}, .09f, 10, Fade(kText, .12f * cardModalVis));
+    DrawRectangleRounded(p, .09f, 10, Fade({250,255,235,255}, cardModalVis));
+    DrawRectangleRoundedLinesEx(p, .09f, 10, 2.5f, Fade(kPanelBorder, cardModalVis));
+    drawSmallFlower(p.x + p.width - 28, p.y + 28, 14, sceneTime * .5f, .5f * cardModalVis);
+
+    DrawText(
+        cardOverflowMode ? "Buang Kartu" : "Kartu Kemampuan",
+        static_cast<int>(p.x + 24),
+        static_cast<int>(p.y + 24),
+        32,
+        kText
+    );
+
+    DrawText(
+        cardOverflowMode ? "Tangan penuh. Pilih satu kartu untuk dibuang." : "Pilih kartu, lalu pakai atau buang.",
+        static_cast<int>(p.x + 24),
+        static_cast<int>(p.y + 68),
+        19,
+        kSubtext
+    );
+
+    Game* g = gameManager->getCurrentGame();
+    Player* current = nullptr;
+    if (g != nullptr) {
+        int idx = g->getTurnManager().getCurrentPlayerIndex();
+        if (idx >= 0 && idx < static_cast<int>(g->getPlayers().size())) {
+            current = &g->getPlayer(idx);
+        }
+    }
+
+    if (current == nullptr || current->getHandCards().empty()) {
+        DrawText(
+            "(tidak ada kartu kemampuan)",
+            static_cast<int>(p.x + 24),
+            static_cast<int>(p.y + 122),
+            22,
+            kSubtext
+        );
+    } else {
+        const auto& hand = current->getHandCards();
+        for (std::size_t i = 0; i < hand.size(); ++i) {
+            Rectangle row{
+                p.x + 24,
+                p.y + 104 + static_cast<float>(i) * 82.0f,
+                p.width - 48,
+                68
+            };
+
+            bool selected = static_cast<int>(i) == selectedCardIndex;
+            DrawRectangleRounded(row, .13f, 8, Fade(selected ? kAccent : kAccentAlt, selected ? .22f : .08f));
+            DrawRectangleRoundedLinesEx(row, .13f, 8, selected ? 2.5f : 1.5f, Fade(selected ? kAccent : kPanelBorder, cardModalVis));
+
+            std::string title = std::to_string(i + 1) + ". " + hand[i]->getName();
+            DrawText(
+                fitText(title, 21, static_cast<int>(row.width - 28)).c_str(),
+                static_cast<int>(row.x + 14),
+                static_cast<int>(row.y + 10),
+                21,
+                kText
+            );
+
+            DrawText(
+                fitText(hand[i]->getDescription(), 17, static_cast<int>(row.width - 28)).c_str(),
+                static_cast<int>(row.x + 14),
+                static_cast<int>(row.y + 38),
+                17,
+                kSubtext
+            );
+        }
+    }
+
+    if (!cardError.empty()) {
+        DrawText(
+            fitText(cardError, 18, static_cast<int>(p.width - 48)).c_str(),
+            static_cast<int>(p.x + 24),
+            static_cast<int>(p.y + p.height - 104),
+            18,
+            kDanger
+        );
+    }
+
+    if (!cardOverflowMode) {
+        useCardButton.setBoundary({
+            p.x + p.width - 520,
+            p.y + p.height - 70,
+            140,
+            50
+        });
+        useCardButton.draw();
+    }
+
+    discardCardButton.setBoundary({
+        p.x + p.width - 354,
+        p.y + p.height - 70,
+        140,
+        50
+    });
+
+    closeCardButton.setBoundary({
+        p.x + p.width - 188,
+        p.y + p.height - 70,
+        140,
+        50
+    });
+
+    discardCardButton.draw();
+    closeCardButton.draw();
+}
+
+void InGameScene::drawLassoTargetModal(Rectangle sr) {
+    if (lassoTargetModalVis <= .01f || !showLassoTargetModal) return;
+
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(kText, .26f * lassoTargetModalVis));
+
+    Rectangle p{
+        sr.width * .5f - 250,
+        sr.height * .5f - 190 + (1 - lassoTargetModalVis) * 24,
+        500,
+        380
+    };
+
+    DrawRectangleRounded({p.x + 5, p.y + 9, p.width, p.height}, .09f, 10, Fade(kText, .12f * lassoTargetModalVis));
+    DrawRectangleRounded(p, .09f, 10, Fade({250,255,235,255}, lassoTargetModalVis));
+    DrawRectangleRoundedLinesEx(p, .09f, 10, 2.5f, Fade(kPanelBorder, lassoTargetModalVis));
+
+    DrawText(
+        "Pilih Target Lasso",
+        static_cast<int>(p.x + 28),
+        static_cast<int>(p.y + 24),
+        30,
+        kText
+    );
+
+    DrawText(
+        "Ada beberapa pemain lawan di petak ini.",
+        static_cast<int>(p.x + 28),
+        static_cast<int>(p.y + 66),
+        18,
+        kSubtext
+    );
+
+    for (std::size_t i = 0; i < lassoTargetButtons.size(); ++i) {
+        lassoTargetButtons[i].setBoundary({
+            p.x + 34,
+            p.y + 102 + static_cast<float>(i) * 58.0f,
+            p.width - 68,
+            46
+        });
+        lassoTargetButtons[i].draw();
+    }
+
+    cancelLassoTargetButton.setBoundary({
+        p.x + p.width - 174,
+        p.y + p.height - 66,
+        140,
+        46
+    });
+    cancelLassoTargetButton.draw();
+}
+
 void InGameScene::drawAuctionModal(Rectangle sr) {
     if (auctionModalVis <= .01f || !showAuctionModal) return;
 
@@ -3163,6 +3719,8 @@ void InGameScene::draw() {
     drawSaveModal(sr);
     drawDiceModal(sr);
     drawLogModal(sr);
+    drawCardModal(sr);
+    drawLassoTargetModal(sr);
     drawAuctionModal(sr);
     drawTradeModal(sr);
 }

@@ -26,6 +26,15 @@ void SpecialTile::onLand(Player* player, Game* game) {
             break;
 
         case GO_TO_JAIL:
+            if (player->isShieldActive()) {
+                game->getLogger().log(
+                    game->getTurnManager().getCurrentTurn(),
+                    player->getUsername(),
+                    "SHIELD",
+                    "Terlindung dari penjara"
+                );
+                return;
+            }
             std::cout << "Masuk penjara!\n";
             if (game->getBoard().getJailIndex() >= 0) {
                 player->moveTo(game->getBoard().getJailIndex());

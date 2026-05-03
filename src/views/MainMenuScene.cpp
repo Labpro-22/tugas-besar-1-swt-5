@@ -320,6 +320,7 @@ void MainMenuScene::onStartGame() {
         }
 
         game->getTurnManager() = TurnManager(turnOrder, maxTurn);
+        game->startTurn();
 
         setupModalPopup.setVisible(false);
         formError.clear();

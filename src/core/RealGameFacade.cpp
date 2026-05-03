@@ -158,6 +158,7 @@ bool RealGameFacade::startNewGame(const std::vector<std::string>& playerNames,
             order.push_back(i);
         }
         game->getTurnManager() = TurnManager(order, maxTurn);
+        game->startTurn();
 
         rebuildViewModel();
         vm.statusLine = "Permainan dimulai! Board: " + std::to_string(game->getBoard().size()) + " petak.";

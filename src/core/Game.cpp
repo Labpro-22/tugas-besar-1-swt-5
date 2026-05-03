@@ -3,12 +3,12 @@
 #include "../../include/models/DerivedAbilityCard.hpp"
 #include "../../include/utils/StreetTile.hpp"
 #include "../../include/utils/PropertyTile.hpp"
-#include "../../include/core/BankruptException.hpp"
-#include "../../include/core/InvalidActionException.hpp"
+#include "../../include/core/HandOverflowException.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <stdexcept>
 
@@ -72,10 +72,36 @@ Game::Game()
       config(),
       gameOver(false),
       lastDiceTotal(0),
-      hasRolledThisTurn(false),
-      extraRollPending(false),
-      festivalSelectionPending(false),
-      pendingFestivalPlayerId(-1) {}
+      hasRolledThisTurn(false) {}
+
+void Game::giveCurrentPlayerTurnStartAbility() {
+    if (players.empty() || gameOver) return;
+
+    int playerIdx = turnManager.getCurrentPlayerIndex();
+    if (playerIdx < 0 || playerIdx >= static_cast<int>(players.size())) return;
+
+    Player& current = players[static_cast<size_t>(playerIdx)];
+    if (current.isBankrupt()) return;
+
+    current.resetTurnFlags();
+
+    std::unique_ptr<AbilityCard> card = cardManager.drawAbilityCard();
+    std::string cardName = card ? card->getName() : "Ability Card";
+    current.addCard(std::move(card));
+
+    logger.log(
+        turnManager.getCurrentTurn(),
+        current.getUsername(),
+        "KARTU_DAPAT",
+        "Mendapat " + cardName + " di awal giliran"
+    );
+
+    if (current.getHandCards().size() > 3) {
+        throw HandOverflowException(
+            current.getUsername() + " memiliki lebih dari 3 kartu. Buang satu kartu."
+        );
+    }
+}
 
 // ──────────────────────────────────────────────
 // GAME LOOP
@@ -84,6 +110,7 @@ Game::Game()
 void Game::run() {
     while (!gameOver) {
         startTurn();
+        break;
     }
 }
 
@@ -91,415 +118,7 @@ void Game::startTurn() {
     if (players.empty() || gameOver) return;
     hasRolledThisTurn = false;
 
-    int playerIdx = turnManager.getCurrentPlayerIndex();
-    Player& current = players[static_cast<size_t>(playerIdx)];
-
-    // Reset flag awal giliran
-    current.resetTurnFlags();
-
-    // Beri kartu kemampuan ke SEMUA pemain aktif
-    for (Player& p : players) {
-        if (!p.isBankrupt()) {
-            cardManager.giveTurnStartAbility(&p);
-            // Cek overflow: max 3 kartu
-            while (p.getHandCards().size() > 3) {
-                cout << "[" << p.getUsername() << "] Tangan penuh! Pilih kartu yang dibuang (0-"
-                     << p.getHandCards().size() - 1 << "): ";
-                int dropIdx = 0;
-                cin >> dropIdx;
-                cin.ignore();
-                try {
-                    auto dropped = p.dropCard(dropIdx);
-                    cardManager.discardAbilityCard(move(dropped));
-                } catch (...) {
-                    p.dropCard(static_cast<int>(p.getHandCards().size()) - 1);
-                }
-            }
-        }
-    }
-
-    // Tampilkan papan
-    map<int, vector<string>> markers;
-    for (const Player& p : players) {
-        if (!p.isBankrupt()) markers[p.getPosition()].push_back(p.getUsername());
-    }
-    string turnInfo = "Turn " + to_string(turnManager.getCurrentTurn())
-                    + " | " + current.getUsername()
-                    + " | M" + to_string(current.getMoney());
-    board.printBoard(markers, turnInfo);
-
-    // REPL
-    bool turnEnded = false;
-    bool hasRolled = false;
-    PropertyTile* resolvedPropertyDecision = nullptr;
-    extraRollPending = false;
-
-    while (!turnEnded && !gameOver) {
-        cout << "\n[" << current.getUsername() << "] >> ";
-        string line;
-        if (!getline(cin, line)) { gameOver = true; break; }
-
-        istringstream ss(line);
-        string cmd;
-        ss >> cmd;
-        for (char& c : cmd) c = toupper(c);
-
-        try {
-            if (isFestivalSelectionPendingForCurrentPlayer()) {
-                const bool isViewCommand =
-                    cmd == "CETAK_PAPAN" ||
-                    cmd == "CETAK_PROPERTI" ||
-                    cmd == "CETAK_AKTA" ||
-                    cmd == "CETAK_LOG" ||
-                    cmd == "CETAK_KARTU";
-
-                if (cmd == "FESTIVAL") {
-                    string code; ss >> code;
-                    vector<string> messages;
-                    if (code.empty()) {
-                        cout << "Masukkan kode properti.\n";
-                        continue;
-                    }
-                    applyFestivalToCurrentPlayerProperty(code, &messages);
-                    for (const string& message : messages) {
-                        cout << message << "\n";
-                    }
-                    continue;
-                }
-
-                const bool isBlockedAction =
-                    cmd == "LEMPAR_DADU" ||
-                    cmd == "GUNAKAN_KEMAMPUAN" ||
-                    cmd == "BELI" ||
-                    cmd == "LELANG" ||
-                    cmd == "TAWAR" ||
-                    cmd == "PASS" ||
-                    cmd == "BANGUN" ||
-                    cmd == "GADAI" ||
-                    cmd == "TEBUS" ||
-                    cmd == "KELUAR_PENJARA_BAYAR" ||
-                    cmd == "KELUAR_PENJARA_KARTU" ||
-                    cmd == "SIMPAN" ||
-                    cmd == "AKHIRI_GILIRAN";
-
-                if (isBlockedAction) {
-                    cout << "Selesaikan pilihan Festival terlebih dahulu. Masukkan kode properti.\n";
-                    continue;
-                }
-
-                if (!cmd.empty() && !isViewCommand) {
-                    vector<string> messages;
-                    applyFestivalToCurrentPlayerProperty(cmd, &messages);
-                    for (const string& message : messages) {
-                        cout << message << "\n";
-                    }
-                    continue;
-                }
-            }
-
-            if (cmd == "CETAK_PAPAN") {
-                board.printBoard(markers, turnInfo);
-
-            } else if (cmd == "CETAK_PROPERTI") {
-                string who;
-                ss >> who;
-                Player* target = &current;
-                if (!who.empty()) {
-                    for (Player& p : players) {
-                        if (p.getUsername() == who) { target = &p; break; }
-                    }
-                }
-                if (target->getOwnedProperties().empty()) {
-                    cout << target->getUsername() << " tidak memiliki properti.\n";
-                } else {
-                    for (PropertyTile* pt : target->getOwnedProperties())
-                        cout << propertySummaryLine(pt, *this) << "\n";
-                }
-
-            } else if (cmd == "CETAK_AKTA") {
-                string code; ss >> code;
-                PropertyTile* pt = dynamic_cast<PropertyTile*>(board.getTileByCode(code));
-                if (!pt) cout << "Bukan petak properti.\n";
-                else cout << propertySummaryLine(pt, *this) << "\n";
-
-            } else if (cmd == "CETAK_LOG") {
-                logger.printLog();
-
-            } else if (cmd == "CETAK_KARTU") {
-                const auto& hand = current.getHandCards();
-                if (hand.empty()) cout << "Tidak memiliki kartu kemampuan.\n";
-                else for (size_t i = 0; i < hand.size(); ++i)
-                    cout << i << ". " << hand[i]->getName()
-                         << " - " << hand[i]->getDescription() << "\n";
-
-            } else if (cmd == "ATUR_DADU") {
-                if (hasRolled && !extraRollPending) { cout << "Dadu sudah dilempar.\n"; continue; }
-                int d1 = 0, d2 = 0; ss >> d1 >> d2;
-                if (d1 < 1 || d1 > 6 || d2 < 1 || d2 > 6)
-                    cout << "Nilai dadu harus 1-6.\n";
-                else { dice.setManual(d1, d2); cout << "Dadu diatur: " << d1 << "+" << d2 << "\n"; }
-
-            } else if (cmd == "GUNAKAN_KEMAMPUAN") {
-                if (hasRolled) { cout << "Hanya bisa sebelum lempar dadu.\n"; continue; }
-                if (current.hasUsedAbilityThisTurn()) { cout << "Sudah pakai kartu giliran ini.\n"; continue; }
-                int idx = 0; ss >> idx;
-                current.useAbilityCard(idx, this);
-                logger.log(turnManager.getCurrentTurn(), current.getUsername(),
-                           "KARTU_KEMAMPUAN", "Kartu ke-" + to_string(idx));
-
-            } else if (cmd == "LEMPAR_DADU") {
-                if (isFestivalSelectionPendingForCurrentPlayer()) {
-                    cout << "Selesaikan pilihan Festival terlebih dahulu. Masukkan kode properti.\n";
-                    continue;
-                }
-                if (hasRolled && !extraRollPending) { cout << "Dadu sudah dilempar.\n"; continue; }
-                if (extraRollPending) {
-                    PropertyTile* blockingProperty = currentBankProperty(*this, current);
-                    if (blockingProperty != nullptr && blockingProperty != resolvedPropertyDecision) {
-                        cout << "Selesaikan BELI atau LELANG " << blockingProperty->getName()
-                             << " sebelum lempar dadu lagi.\n";
-                        continue;
-                    }
-                    if (auctionManager.isAuctionActive()) {
-                        cout << "Selesaikan lelang aktif sebelum lempar dadu lagi.\n";
-                        continue;
-                    }
-                    hasRolled = false;
-                    hasRolledThisTurn = false;
-                    extraRollPending = false;
-                }
-                if (current.getStatus() == PlayerStatus::JAILED && current.getJailTurnsAttempted() >= 3) {
-                    cout << "Sudah gagal 3 kali. Giliran ini wajib bayar denda penjara sebelum lempar dadu.\n";
-                    continue;
-                }
-
-                auto result = dice.roll();
-                int d1 = result.first, d2 = result.second;
-                setLastDiceTotal(d1 + d2);
-                hasRolledThisTurn = true;
-                resolvedPropertyDecision = nullptr;
-                cout << current.getUsername() << " melempar: " << d1 << "+" << d2 << "=" << d1+d2 << "\n";
-
-                if (current.getStatus() == PlayerStatus::JAILED) {
-                    // Di penjara
-                    if (dice.isDouble(result)) {
-                        current.releaseFromJail();
-                        cout << "Double! Keluar penjara.\n";
-                        logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA", "Keluar dengan double");
-                        bool passedGo = false;
-                        int newPos = board.calculateNewPosition(current.getPosition(), d1+d2, passedGo);
-                        current.moveTo(newPos);
-                        if (passedGo) {
-                            awardGoSalary(current);
-                        }
-                        handleLanding(current);
-                    } else {
-                        current.incrementJailAttempt();
-                        cout << "Tidak double. Percobaan " << current.getJailTurnsAttempted() << "/3.\n";
-                        if (current.getJailTurnsAttempted() >= 3) {
-                            int fine = config.getSpecialConfig(JAIL_FINE);
-                            cout << "Batas percobaan habis. Pada giliran penjara berikutnya wajib bayar denda M" << fine << ".\n";
-                        }
-                        hasRolled = true;
-                        turnEnded = true;
-                        endTurn();
-                        return;
-                    }
-                } else {
-                    // Normal
-                    logger.log(turnManager.getCurrentTurn(), current.getUsername(), "DADU",
-                               to_string(d1) + "+" + to_string(d2));
-                    bool isDouble = dice.isDouble(result);
-                    if (isDouble) {
-                        current.addConsecutiveDouble();
-                        if (current.getConsecutiveDoubleCount() >= 3) {
-                            cout << "3 double! Masuk penjara.\n";
-                            int jailIndex = board.getJailIndex();
-                            if (jailIndex >= 0) current.moveTo(jailIndex);
-                            current.enterJail();
-                            logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA", "3 double berturut");
-                            hasRolled = true; turnEnded = true;
-                            endTurn(); return;
-                        }
-                    }
-                    bool passedGo = false;
-                    int newPos = board.calculateNewPosition(current.getPosition(), d1+d2, passedGo);
-                    current.moveTo(newPos);
-                    if (passedGo) {
-                        awardGoSalary(current);
-                        cout << "Melewati GO! Terima gaji.\n";
-                    }
-                    handleLanding(current);
-
-                    if (isDouble && current.getStatus() != PlayerStatus::JAILED) {
-                        cout << "Double! Selesaikan BELI/LELANG jika ada, lalu lempar dadu lagi.\n";
-                        extraRollPending = true;
-                    } else if (!isDouble) {
-                        current.resetConsecutiveDouble();
-                    }
-                }
-                hasRolled = true;
-
-            } else if (cmd == "BELI") {
-                if (isFestivalSelectionPendingForCurrentPlayer()) {
-                    cout << "Selesaikan pilihan Festival terlebih dahulu. Masukkan kode properti.\n";
-                    continue;
-                }
-                if (!hasRolled) { cout << "Lempar dadu dulu.\n"; continue; }
-                PropertyTile* pt = dynamic_cast<PropertyTile*>(board.getTileByIndex(current.getPosition()));
-                if (!pt || pt->getStatus() != BANK) { cout << "Tidak ada properti BANK di sini.\n"; continue; }
-                int price = pt->getLandPrice();
-                if (!current.canAfford(price)) { cout << "Uang tidak cukup. Perlu M" << price << ".\n"; continue; }
-                current.pay(price);
-                pt->setOwner(&current);
-                current.addProperty(pt);
-                resolvedPropertyDecision = pt;
-                cout << "Beli " << pt->getName() << " M" << price << ".\n";
-                logger.log(turnManager.getCurrentTurn(), current.getUsername(), "BELI", pt->getName() + " M" + to_string(price));
-
-            } else if (cmd == "LELANG") {
-                if (isFestivalSelectionPendingForCurrentPlayer()) {
-                    cout << "Selesaikan pilihan Festival terlebih dahulu. Masukkan kode properti.\n";
-                    continue;
-                }
-                if (!hasRolled) { cout << "Lempar dadu dulu.\n"; continue; }
-                PropertyTile* pt = dynamic_cast<PropertyTile*>(board.getTileByIndex(current.getPosition()));
-                if (!pt || pt->getStatus() != BANK) { cout << "Tidak ada properti untuk dilelang.\n"; continue; }
-                vector<Player*> bidders;
-                for (Player& p : players) { if (!p.isBankrupt()) bidders.push_back(&p); }
-                auctionManager.runAuction(*pt, bidders, current, *this);
-                resolvedPropertyDecision = pt;
-                cout << "Lelang dimulai. Gunakan TAWAR <jumlah> atau PASS.\n";
-
-            } else if (cmd == "TAWAR") {
-                if (!auctionManager.isAuctionActive()) { cout << "Tidak ada lelang aktif.\n"; continue; }
-                int amount = 0; ss >> amount;
-                auctionManager.processAction("BID", amount);
-
-            } else if (cmd == "PASS") {
-                if (!auctionManager.isAuctionActive()) { cout << "Tidak ada lelang aktif.\n"; continue; }
-                auctionManager.processAction("PASS");
-
-            } else if (cmd == "BANGUN") {
-                string code; ss >> code;
-                StreetTile* st = dynamic_cast<StreetTile*>(board.getTileByCode(code));
-                if (!st || st->getOwner() != &current) { cout << "Bukan StreetTile milik Anda.\n"; continue; }
-                if (st->getBuildingLevel() < 4 && st->canBuildHouse(this)) {
-                    int cost = st->getHouseBuildCost();
-                    if (!current.canAfford(cost)) { cout << "Perlu M" << cost << ".\n"; continue; }
-                    current.pay(cost); st->buildHouse();
-                    cout << "Rumah dibangun di " << st->getName() << ". Total: " << st->getHouseCount() << "\n";
-                    logger.log(turnManager.getCurrentTurn(), current.getUsername(), "BANGUN", "Rumah di " + st->getName());
-                } else if (st->getBuildingLevel() == 4 && st->canBuildHotel(this)) {
-                    int cost = st->getHotelBuildCost();
-                    if (!current.canAfford(cost)) { cout << "Perlu M" << cost << ".\n"; continue; }
-                    current.pay(cost); st->buildHotel();
-                    cout << "Hotel dibangun di " << st->getName() << ".\n";
-                    logger.log(turnManager.getCurrentTurn(), current.getUsername(), "BANGUN", "Hotel di " + st->getName());
-                } else { cout << "Tidak bisa bangun di " << code << ".\n"; }
-
-            } else if (cmd == "GADAI") {
-                string code; ss >> code;
-                PropertyTile* pt = dynamic_cast<PropertyTile*>(board.getTileByCode(code));
-                if (!pt || pt->getOwner() != &current) { cout << "Bukan properti Anda.\n"; continue; }
-                if (pt->isMortgaged()) { cout << "Sudah digadaikan.\n"; continue; }
-                if (!pt->canBeMortgaged(this)) { cout << "Tidak bisa digadaikan (ada bangunan di colorgroup).\n"; continue; }
-                int val = pt->mortgage(); current.receive(val);
-                cout << pt->getName() << " digadaikan. Terima M" << val << ".\n";
-                logger.log(turnManager.getCurrentTurn(), current.getUsername(), "GADAI", pt->getName() + " M" + to_string(val));
-
-            } else if (cmd == "TEBUS") {
-                string code; ss >> code;
-                PropertyTile* pt = dynamic_cast<PropertyTile*>(board.getTileByCode(code));
-                if (!pt || pt->getOwner() != &current) { cout << "Bukan properti Anda.\n"; continue; }
-                if (!pt->isMortgaged()) { cout << "Tidak sedang digadaikan.\n"; continue; }
-                int price = pt->getLandPrice();
-                if (!current.canAfford(price)) { cout << "Perlu M" << price << ".\n"; continue; }
-                current.pay(price); pt->redeem();
-                cout << pt->getName() << " ditebus M" << price << ".\n";
-                logger.log(turnManager.getCurrentTurn(), current.getUsername(), "TEBUS", pt->getName() + " M" + to_string(price));
-
-            } else if (cmd == "KELUAR_PENJARA_BAYAR") {
-                if (current.getStatus() != PlayerStatus::JAILED) { cout << "Tidak di penjara.\n"; continue; }
-                if (hasRolled) { cout << "Sudah terlambat.\n"; continue; }
-                int fine = config.getSpecialConfig(JAIL_FINE);
-                if (!current.canAfford(fine)) { cout << "Tidak cukup M" << fine << ".\n"; continue; }
-                payBankOrBankrupt(current, fine, "Denda penjara");
-                if (!current.isBankrupt()) current.releaseFromJail();
-                cout << "Keluar penjara bayar M" << fine << ".\n";
-                logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA", "Bayar denda M" + to_string(fine));
-
-            } else if (cmd == "KELUAR_PENJARA_KARTU") {
-                if (current.getStatus() != PlayerStatus::JAILED) { cout << "Tidak di penjara.\n"; continue; }
-                if (hasRolled) { cout << "Sudah terlambat.\n"; continue; }
-                if (useJailFreeCardForCurrentPlayer()) {
-                    cout << "Keluar penjara dengan kartu Bebas dari Penjara.\n";
-                } else {
-                    cout << "Tidak memiliki kartu Bebas dari Penjara.\n";
-                }
-
-            } else if (cmd == "SIMPAN") {
-                if (hasRolled) { cout << "Simpan hanya bisa sebelum lempar dadu.\n"; continue; }
-                cout << "(Simpan ditangani GameManager)\n";
-
-            } else if (cmd == "AKHIRI_GILIRAN") {
-                if (isFestivalSelectionPendingForCurrentPlayer()) {
-                    cout << "Selesaikan pilihan Festival terlebih dahulu. Masukkan kode properti.\n";
-                    continue;
-                }
-                if (!hasRolled) { cout << "Lempar dadu dulu.\n"; continue; }
-                if (auctionManager.isAuctionActive()) { cout << "Selesaikan lelang aktif dulu.\n"; continue; }
-                PropertyTile* blockingProperty = currentBankProperty(*this, current);
-                if (blockingProperty != nullptr && blockingProperty != resolvedPropertyDecision) {
-                    cout << "Properti " << blockingProperty->getName()
-                         << " belum diproses. Pilih BELI atau LELANG dulu.\n";
-                    continue;
-                }
-                if (extraRollPending) {
-                    cout << "Masih ada giliran ekstra karena double. Lempar dadu lagi.\n";
-                    continue;
-                }
-                turnEnded = true;
-
-            } else if (cmd == "FESTIVAL") {
-                string code; ss >> code;
-                vector<string> messages;
-                if (code.empty()) {
-                    cout << "Masukkan kode properti.\n";
-                    continue;
-                }
-                applyFestivalToCurrentPlayerProperty(code, &messages);
-                for (const string& message : messages) {
-                    cout << message << "\n";
-                }
-
-            } else if (!cmd.empty() && isFestivalSelectionPendingForCurrentPlayer()) {
-                vector<string> messages;
-                applyFestivalToCurrentPlayerProperty(cmd, &messages);
-                for (const string& message : messages) {
-                    cout << message << "\n";
-                }
-
-            } else if (!cmd.empty()) {
-                cout << "Perintah tidak dikenal: " << cmd << "\n";
-            }
-
-        } catch (BankruptException& e) {
-            cout << "[BANGKRUT] " << e.getMessage() << "\n";
-            current.setStatus(PlayerStatus::BANKRUPT);
-            turnManager.removePlayer(playerIdx);
-            turnEnded = true;
-        } catch (InvalidActionException& e) {
-            cout << "[AKSI TIDAK VALID] " << e.getMessage() << "\n";
-        } catch (exception& e) {
-            cout << "[ERROR] " << e.what() << "\n";
-        }
-
-        checkWinCondition();
-        if (gameOver) break;
-    }
-
-    if (!gameOver) endTurn();
+    giveCurrentPlayerTurnStartAbility();
 }
 
 void Game::endTurn() {
@@ -575,6 +194,10 @@ void Game::endTurn() {
 
     turnManager.nextPlayer();
     checkWinCondition();
+
+    if (!gameOver) {
+        giveCurrentPlayerTurnStartAbility();
+    }
 }
 
 void Game::handleLanding(Player& player) {
@@ -624,6 +247,13 @@ std::pair<int, int> Game::rollDiceForCurrentPlayer() {
             logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA", "Keluar dengan double");
         } else {
             current.incrementJailAttempt();
+            if (current.getJailTurnsAttempted() > 3) {
+                int fine = config.getSpecialConfig(JAIL_FINE);
+                payBankOrBankrupt(current, fine, "Denda penjara");
+                if (!current.isBankrupt()) {
+                    current.releaseFromJail();
+                }
+            }
             logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA",
                        "Gagal double percobaan " + to_string(current.getJailTurnsAttempted()) + "/3");
             return result;
@@ -682,6 +312,11 @@ bool Game::buyCurrentProperty() {
     }
 
     int price = pt->getLandPrice();
+
+    if (current.getDiscountDuration() > 0) {
+        price = price * (100 - current.getDiscountPercent()) / 100;
+    }
+
     if (!current.canAfford(price)) {
         logger.log(turnManager.getCurrentTurn(), current.getUsername(), "BELI_GAGAL",
                    pt->getName() + " perlu M" + to_string(price));
@@ -736,6 +371,11 @@ bool Game::redeemProperty(const std::string& code) {
     }
 
     int price = pt->getLandPrice();
+
+    if (current.getDiscountDuration() > 0) {
+        price = price * (100 - current.getDiscountPercent()) / 100;
+    }
+    
     if (!current.canAfford(price)) {
         return false;
     }
@@ -765,6 +405,9 @@ bool Game::buildProperty(const std::string& code) {
 
     if (st->getBuildingLevel() < 4 && st->canBuildHouse(this)) {
         int cost = st->getHouseBuildCost();
+        if (current.getDiscountDuration() > 0) {
+            cost = cost * (100 - current.getDiscountPercent()) / 100;
+        }
         if (!current.canAfford(cost)) {
             return false;
         }
@@ -777,6 +420,9 @@ bool Game::buildProperty(const std::string& code) {
 
     if (st->getBuildingLevel() == 4 && st->canBuildHotel(this)) {
         int cost = st->getHotelBuildCost();
+        if (current.getDiscountDuration() > 0) {
+            cost = cost * (100 - current.getDiscountPercent()) / 100;
+        }
         if (!current.canAfford(cost)) {
             return false;
         }
@@ -788,6 +434,183 @@ bool Game::buildProperty(const std::string& code) {
     }
 
     return false;
+}
+
+bool Game::useCurrentPlayerAbilityCard(int cardIndex) {
+    if (players.empty() || gameOver || hasRolledThisTurn) {
+        return false;
+    }
+
+    int playerIdx = turnManager.getCurrentPlayerIndex();
+    if (playerIdx < 0 || playerIdx >= static_cast<int>(players.size())) {
+        return false;
+    }
+
+    Player& current = players[static_cast<size_t>(playerIdx)];
+    if (current.isBankrupt() || current.hasUsedAbilityThisTurn()) {
+        return false;
+    }
+
+    const auto& hand = current.getHandCards();
+    if (cardIndex < 0 || cardIndex >= static_cast<int>(hand.size())) {
+        return false;
+    }
+
+    if (!hand[static_cast<size_t>(cardIndex)]->canUse(&current, this)) {
+        return false;
+    }
+
+    std::string cardName = hand[static_cast<size_t>(cardIndex)]->getName();
+    if (cardName == "TeleportCard" || cardName == "LassoCard" || cardName == "DemolitionCard") {
+        return false;
+    }
+
+    current.useAbilityCard(cardIndex, this);
+    std::unique_ptr<AbilityCard> used = current.dropCard(cardIndex);
+    cardManager.discardAbilityCard(std::move(used));
+
+    logger.log(
+        turnManager.getCurrentTurn(),
+        current.getUsername(),
+        "KARTU_PAKAI",
+        "Memakai " + cardName
+    );
+
+    return true;
+}
+
+bool Game::useCurrentPlayerTeleportCard(int cardIndex, int tileIndex) {
+    if (players.empty() || gameOver || hasRolledThisTurn || board.size() == 0) {
+        return false;
+    }
+
+    int playerIdx = turnManager.getCurrentPlayerIndex();
+    if (playerIdx < 0 || playerIdx >= static_cast<int>(players.size())) {
+        return false;
+    }
+
+    Player& current = players[static_cast<size_t>(playerIdx)];
+    const auto& hand = current.getHandCards();
+    if (current.isBankrupt() || current.hasUsedAbilityThisTurn() ||
+        cardIndex < 0 || cardIndex >= static_cast<int>(hand.size()) ||
+        tileIndex < 0 || tileIndex >= board.size()) {
+        return false;
+    }
+
+    TeleportCard* card = dynamic_cast<TeleportCard*>(hand[static_cast<size_t>(cardIndex)].get());
+    if (card == nullptr || !card->canUse(&current, this)) {
+        return false;
+    }
+
+    std::string cardName = card->getName();
+    card->setDestination(tileIndex);
+    current.useAbilityCard(cardIndex, this);
+    std::unique_ptr<AbilityCard> used = current.dropCard(cardIndex);
+    cardManager.discardAbilityCard(std::move(used));
+
+    logger.log(turnManager.getCurrentTurn(), current.getUsername(), "KARTU_PAKAI",
+               "Memakai " + cardName + " ke petak " + std::to_string(tileIndex));
+
+    return true;
+}
+
+bool Game::useCurrentPlayerDemolitionCard(int cardIndex, int tileIndex) {
+    if (players.empty() || gameOver || hasRolledThisTurn || board.size() == 0) {
+        return false;
+    }
+
+    int playerIdx = turnManager.getCurrentPlayerIndex();
+    if (playerIdx < 0 || playerIdx >= static_cast<int>(players.size())) {
+        return false;
+    }
+
+    Player& current = players[static_cast<size_t>(playerIdx)];
+    const auto& hand = current.getHandCards();
+    if (current.isBankrupt() || current.hasUsedAbilityThisTurn() ||
+        cardIndex < 0 || cardIndex >= static_cast<int>(hand.size()) ||
+        tileIndex < 0 || tileIndex >= board.size()) {
+        return false;
+    }
+
+    DemolitionCard* card = dynamic_cast<DemolitionCard*>(hand[static_cast<size_t>(cardIndex)].get());
+    if (card == nullptr || !card->canUse(&current, this)) {
+        return false;
+    }
+
+    std::string cardName = card->getName();
+    card->setTargetTileIndex(tileIndex);
+    current.useAbilityCard(cardIndex, this);
+    std::unique_ptr<AbilityCard> used = current.dropCard(cardIndex);
+    cardManager.discardAbilityCard(std::move(used));
+
+    logger.log(turnManager.getCurrentTurn(), current.getUsername(), "KARTU_PAKAI",
+               "Memakai " + cardName + " di petak " + std::to_string(tileIndex));
+
+    return true;
+}
+
+bool Game::useCurrentPlayerLassoCard(int cardIndex, int targetPlayerId) {
+    if (players.empty() || gameOver || hasRolledThisTurn) {
+        return false;
+    }
+
+    int playerIdx = turnManager.getCurrentPlayerIndex();
+    if (playerIdx < 0 || playerIdx >= static_cast<int>(players.size())) {
+        return false;
+    }
+
+    Player& current = players[static_cast<size_t>(playerIdx)];
+    const auto& hand = current.getHandCards();
+    if (current.isBankrupt() || current.hasUsedAbilityThisTurn() ||
+        cardIndex < 0 || cardIndex >= static_cast<int>(hand.size())) {
+        return false;
+    }
+
+    LassoCard* card = dynamic_cast<LassoCard*>(hand[static_cast<size_t>(cardIndex)].get());
+    if (card == nullptr || !card->canUse(&current, this)) {
+        return false;
+    }
+
+    std::string cardName = card->getName();
+    card->setTargetPlayerId(targetPlayerId);
+    current.useAbilityCard(cardIndex, this);
+    std::unique_ptr<AbilityCard> used = current.dropCard(cardIndex);
+    cardManager.discardAbilityCard(std::move(used));
+
+    logger.log(turnManager.getCurrentTurn(), current.getUsername(), "KARTU_PAKAI",
+               "Memakai " + cardName + " ke pemain " + std::to_string(targetPlayerId));
+
+    return true;
+}
+
+bool Game::discardCurrentPlayerAbilityCard(int cardIndex) {
+    if (players.empty() || gameOver) {
+        return false;
+    }
+
+    int playerIdx = turnManager.getCurrentPlayerIndex();
+    if (playerIdx < 0 || playerIdx >= static_cast<int>(players.size())) {
+        return false;
+    }
+
+    Player& current = players[static_cast<size_t>(playerIdx)];
+    const auto& hand = current.getHandCards();
+    if (cardIndex < 0 || cardIndex >= static_cast<int>(hand.size())) {
+        return false;
+    }
+
+    std::unique_ptr<AbilityCard> dropped = current.dropCard(cardIndex);
+    std::string cardName = dropped ? dropped->getName() : "Ability Card";
+    cardManager.discardAbilityCard(std::move(dropped));
+
+    logger.log(
+        turnManager.getCurrentTurn(),
+        current.getUsername(),
+        "KARTU_BUANG",
+        "Membuang " + cardName
+    );
+
+    return true;
 }
 
 namespace {
@@ -831,6 +654,10 @@ void Game::payBankOrBankrupt(Player& player, int amount, const std::string& reas
         return;
     }
 
+    if (player.getDiscountDuration() > 0) {
+        amount = amount * (100 - player.getDiscountPercent()) / 100;
+    }
+
     if (!player.canAfford(amount)) {
         liquidateAutomatically(player, *this, amount);
     }
@@ -848,6 +675,10 @@ void Game::payBankOrBankrupt(Player& player, int amount, const std::string& reas
 void Game::payPlayerOrBankrupt(Player& payer, Player& receiver, int amount, const std::string& reason) {
     if (amount <= 0 || payer.isBankrupt() || receiver.isBankrupt()) {
         return;
+    }
+
+    if (payer.getDiscountDuration() > 0) {
+        amount = amount * (100 - payer.getDiscountPercent()) / 100;
     }
 
     if (!payer.canAfford(amount)) {

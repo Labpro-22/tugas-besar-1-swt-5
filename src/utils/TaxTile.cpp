@@ -11,6 +11,16 @@ void TaxTile::onLand(Player* player, Game* game) {
         return;
     }
 
+    if (player->isShieldActive()) {
+        game->getLogger().log(
+            game->getTurnManager().getCurrentTurn(),
+            player->getUsername(),
+            "SHIELD",
+            "Terlindung dari pajak"
+        );
+        return;
+    }
+
     if (taxType == TAX_PPH) {
         const int flatTax = game->getConfig().getTaxConfig(PPH);
         const int percent = game->getConfig().getTaxConfig(PERSEN);

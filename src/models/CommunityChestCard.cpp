@@ -19,6 +19,15 @@ BirthdayCard::BirthdayCard() : CommunityChestCard(
 PayDoctorCard::PayDoctorCard() : CommunityChestCard(
     "Biaya dokter. Bayar M700.",
     [](Player* p, Game* g) {
+        if (p->isShieldActive()) {
+            g->getLogger().log(
+                g->getTurnManager().getCurrentTurn(),
+                p->getUsername(),
+                "SHIELD",
+                "Terlindung dari biaya dokter"
+            );
+            return;
+        }
         g->payBankOrBankrupt(*p, 700, "Biaya dokter");
     }
 ) {}
@@ -26,6 +35,15 @@ PayDoctorCard::PayDoctorCard() : CommunityChestCard(
 NyalegCard::NyalegCard() : CommunityChestCard(
     "Anda mau nyaleg. Bayar M200 kepada setiap pemain.",
     [](Player* p, Game* g) {
+        if (p->isShieldActive()) {
+            g->getLogger().log(
+                g->getTurnManager().getCurrentTurn(),
+                p->getUsername(),
+                "SHIELD",
+                "Terlindung dari biaya nyaleg"
+            );
+            return;
+        }
         for (Player& player : g->getPlayers()) {
             if (player.getId() != p->getId()) {
                 g->payPlayerOrBankrupt(*p, player, 200, "Kartu nyaleg");

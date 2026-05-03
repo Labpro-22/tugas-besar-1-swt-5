@@ -52,6 +52,15 @@ void PropertyTile::onLand(Player* player, Game* game) {
     }
 
     if (status == OWNED && owner != nullptr && owner != player) {
+        if (player->isShieldActive()) {
+            game->getLogger().log(
+                game->getTurnManager().getCurrentTurn(),
+                player->getUsername(),
+                "SHIELD",
+                "Terlindung dari biaya sewa"
+            );
+            return;
+        }
         const int rent = calculateRent(player, game);
         std::cout << player->getUsername() << " membayar sewa " << name
                   << " M" << rent << " kepada " << owner->getUsername() << ".\n";

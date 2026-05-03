@@ -37,6 +37,8 @@ private:
     bool extraRollPending;
     bool festivalSelectionPending;
     int pendingFestivalPlayerId;
+
+    void giveCurrentPlayerTurnStartAbility();
     
 public:
     // Constructor
@@ -58,6 +60,11 @@ public:
     bool mortgageProperty(const std::string& code);
     bool redeemProperty(const std::string& code);
     bool buildProperty(const std::string& code);
+    bool useCurrentPlayerAbilityCard(int cardIndex);
+    bool useCurrentPlayerTeleportCard(int cardIndex, int tileIndex);
+    bool useCurrentPlayerDemolitionCard(int cardIndex, int tileIndex);
+    bool useCurrentPlayerLassoCard(int cardIndex, int targetPlayerId);
+    bool discardCurrentPlayerAbilityCard(int cardIndex);
     void awardGoSalary(Player& player);
     void payBankOrBankrupt(Player& player, int amount, const std::string& reason);
     void payPlayerOrBankrupt(Player& payer, Player& receiver, int amount, const std::string& reason);

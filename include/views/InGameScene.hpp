@@ -29,6 +29,11 @@ private:
     Button diceCancelButton;
     Button openLogButton;
     Button closeLogButton;
+    Button closeCardButton;
+    Button useCardButton;
+    Button discardCardButton;
+    Button cancelLassoTargetButton;
+    std::vector<Button> lassoTargetButtons;
     Button auctionBidButton;
     Button auctionPassButton;
     Button auctionCloseButton;
@@ -70,6 +75,17 @@ private:
     bool showLogModal;
     float logModalVis;
 
+    bool showCardModal;
+    bool cardOverflowMode;
+    int selectedCardIndex;
+    std::string cardError;
+    float cardModalVis;
+
+    bool showLassoTargetModal;
+    std::vector<int> lassoTargetPlayerIds;
+    int pendingLassoCardIndex;
+    float lassoTargetModalVis;
+
     bool propertyDecisionPending;
     bool propertyDecisionResolved;
     PropertyTile* pendingProperty;
@@ -104,7 +120,14 @@ private:
     void drawSaveModal(Rectangle sr);
     void drawDiceModal(Rectangle sr);
     void drawLogModal(Rectangle sr);
+    void drawCardModal(Rectangle sr);
+    void drawLassoTargetModal(Rectangle sr);
     void drawAuctionModal(Rectangle sr);
+    void openCardModal(bool overflowMode);
+    void onUseSelectedCard();
+    void onDiscardSelectedCard();
+    void openLassoTargetModal(const std::vector<int>& targetPlayerIds);
+    void onLassoTargetSelected(int targetPlayerId);
     void drawTradeModal(Rectangle sr);
     void onSaveGame();
     void rollDiceAndShowResult();

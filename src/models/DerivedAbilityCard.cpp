@@ -6,8 +6,6 @@
 #include "../../include/utils/StreetTile.hpp"
 #include "../../include/utils/Tile.hpp"
 
-#include <iostream>
-#include <limits>
 #include <random>
 
 std::string AbilityCard::escapeSerializedValue(const std::string& value)
@@ -87,11 +85,7 @@ void MoveCard::use(Player* target, Game* game)
         target->receive(salary);
     }
 
-    Tile* landedTile = board.getTileByIndex(dest);
-    if (landedTile != nullptr)
-    {
-        landedTile->onLand(target, game);
-    }
+    game->handleLanding(*target);
 }
 
 std::string MoveCard::serialize() const
@@ -109,7 +103,7 @@ DiscountCard::DiscountCard()
       percentage(0) {}
 
 DiscountCard::DiscountCard(int percentage)
-    : AbilityCard("DiscountCard", "Dapatkan diskon " + std::to_string(percentage) + "%% selama 1 giliran."),
+    : AbilityCard("DiscountCard", "Dapatkan diskon " + std::to_string(percentage) + "% selama 1 giliran."),
       percentage(percentage) {}
 
 void DiscountCard::setup()
@@ -118,7 +112,7 @@ void DiscountCard::setup()
     std::uniform_int_distribution<int> picker(1, 100);
 
     percentage = picker(randomizer);
-    description = "Dapatkan diskon " + std::to_string(percentage) + "%% selama 1 giliran.";
+    description = "Dapatkan diskon " + std::to_string(percentage) + "% selama 1 giliran.";
 }
 
 void DiscountCard::use(Player* target, Game* game)
@@ -166,7 +160,13 @@ std::string ShieldCard::serialize() const
 // Teleport Card
 
 TeleportCard::TeleportCard()
-    : AbilityCard("TeleportCard", "Bebas berpindah ke petak manapun di atas papan permainan.") {}
+    : AbilityCard("TeleportCard", "Bebas berpindah ke petak manapun di atas papan permainan."),
+      destination(-1) {}
+
+void TeleportCard::setDestination(int tileIndex)
+{
+    destination = tileIndex;
+}
 
 void TeleportCard::use(Player* target, Game* game)
 {
@@ -175,30 +175,17 @@ void TeleportCard::use(Player* target, Game* game)
         throw InvalidActionException("TELEPORT TARGET/GAME TIDAK VALID");
     }
 
-    int dest;
-
-    if (!(std::cin >> dest))
-    {
-        std::cin.clear();
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-        throw InvalidActionException("INPUT TELEPORT TIDAK VALID");
-    }
-
     Board& board = game->getBoard();
     int boardSize = board.size();
 
-    if (dest < 0 || dest >= boardSize)
+    if (destination < 0 || destination >= boardSize)
     {
         throw InvalidActionException("TELEPORT KE LUAR BOARD");
     }
 
-    target->moveTo(dest);
+    target->moveTo(destination);
 
-    Tile* landedTile = board.getTileByIndex(dest);
-    if (landedTile != nullptr)
-    {
-        landedTile->onLand(target, game);
-    }
+    game->handleLanding(*target);
 }
 
 std::string TeleportCard::serialize() const
@@ -211,7 +198,13 @@ std::string TeleportCard::serialize() const
 // ========================================================
 
 LassoCard::LassoCard()
-    : AbilityCard("LassoCard", "Tarik satu pemain lain di depanmu ke posisimu.") {}
+    : AbilityCard("LassoCard", "Tarik satu pemain lain di depanmu ke posisimu."),
+      targetPlayerId(-1) {}
+
+void LassoCard::setTargetPlayerId(int playerId)
+{
+    targetPlayerId = playerId;
+}
 
 void LassoCard::use(Player* target, Game* game)
 {
@@ -220,20 +213,11 @@ void LassoCard::use(Player* target, Game* game)
         throw InvalidActionException("LASSO TARGET/GAME TIDAK VALID");
     }
 
-    int id;
-
-    if (!(std::cin >> id))
-    {
-        std::cin.clear();
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-        throw InvalidActionException("INPUT LASSO TIDAK VALID");
-    }
-
     Player* enemy = nullptr;
 
     for (Player& player : game->getPlayers())
     {
-        if (player.getId() == id)
+        if (player.getId() == targetPlayerId)
         {
             enemy = &player;
             break;
@@ -247,11 +231,7 @@ void LassoCard::use(Player* target, Game* game)
 
     enemy->moveTo(target->getPosition());
 
-    Tile* landedTile = game->getBoard().getTileByIndex(target->getPosition());
-    if (landedTile != nullptr)
-    {
-        landedTile->onLand(enemy, game);
-    }
+    game->handleLanding(*enemy);
 }
 
 std::string LassoCard::serialize() const
@@ -264,7 +244,13 @@ std::string LassoCard::serialize() const
 // ========================================================
 
 DemolitionCard::DemolitionCard()
-    : AbilityCard("DemolitionCard", "Hancurkan satu properti milik pemain lain.") {}
+    : AbilityCard("DemolitionCard", "Hancurkan satu properti milik pemain lain."),
+      targetTileIndex(-1) {}
+
+void DemolitionCard::setTargetTileIndex(int tileIndex)
+{
+    targetTileIndex = tileIndex;
+}
 
 void DemolitionCard::use(Player* target, Game* game)
 {
@@ -273,24 +259,15 @@ void DemolitionCard::use(Player* target, Game* game)
         throw InvalidActionException("DEMOLITION TARGET/GAME TIDAK VALID");
     }
 
-    int dest;
-
-    if (!(std::cin >> dest))
-    {
-        std::cin.clear();
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-        throw InvalidActionException("INPUT DEMOLISH TIDAK VALID");
-    }
-
     Board& board = game->getBoard();
     int boardSize = board.size();
 
-    if (dest < 0 || dest >= boardSize)
+    if (targetTileIndex < 0 || targetTileIndex >= boardSize)
     {
         throw InvalidActionException("DEMOLISH KE LUAR BOARD");
     }
 
-    StreetTile* property = dynamic_cast<StreetTile*>(board.getTileByIndex(dest));
+    StreetTile* property = dynamic_cast<StreetTile*>(board.getTileByIndex(targetTileIndex));
 
     if (property == nullptr)
     {
@@ -309,6 +286,7 @@ std::string DemolitionCard::serialize() const
 {
     return serializeCommonAbilityFields(name, description);
 }
+
 
 // ========================================================
 // JailFreeCard

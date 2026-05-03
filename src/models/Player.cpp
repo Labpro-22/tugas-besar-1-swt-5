@@ -93,6 +93,7 @@ std::string Player::toString() const {
 }
 void Player::useAbilityCard(int index, Game* game) {
     this->handCards.at(index)->use(this, game);
+    this->usedAbilityThisTurn = true;
 }
 bool Player::operator<(const Player& other) const {
     return this->getTotalWealth() < other.getTotalWealth();

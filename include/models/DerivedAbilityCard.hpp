@@ -11,8 +11,12 @@ public:
 
 class TeleportCard : public AbilityCard
 {
+private:
+    int destination;
+
 public:
     TeleportCard();
+    void setDestination(int tileIndex);
     void use(Player* target, Game* game) override;
     std::string serialize() const override;
 };
@@ -33,8 +37,12 @@ public:
 
 class LassoCard : public AbilityCard
 {
+private:
+    int targetPlayerId;
+
 public:
     LassoCard();
+    void setTargetPlayerId(int playerId);
     void use(Player* target, Game* game) override;
     std::string serialize() const override;
 };
@@ -55,11 +63,16 @@ public:
 
 class DemolitionCard : public AbilityCard
 {
+private:
+    int targetTileIndex;
+
 public:
     DemolitionCard();
+    void setTargetTileIndex(int tileIndex);
     void use(Player* target, Game* game) override;
     std::string serialize() const override;
 };
+
 
 class JailFreeCard : public AbilityCard
 {

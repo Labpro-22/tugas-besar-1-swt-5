@@ -33,6 +33,8 @@ AbilityCardDeck::AbilityCardDeck() {
     {
         drawPile.push_back(std::make_unique<JailFreeCard>());
     }
+    std::mt19937 randomizer(std::random_device{}());
+    std::shuffle(this->drawPile.begin(), this->drawPile.end(), randomizer);
 }
 
 AbilityCardDeck::AbilityCardDeck(std::vector<std::unique_ptr<AbilityCard>> drawPile,
