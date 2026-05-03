@@ -1201,8 +1201,8 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
 
     savePathField.setMaxLength(160);
     savePathField.setContent("data/save.txt");
-    diceOneField.setMaxLength(2);
-    diceTwoField.setMaxLength(2);
+    diceOneField.setMaxLength(4);
+    diceTwoField.setMaxLength(4);
     auctionBidField.setMaxLength(12);
     tradeTargetField.setMaxLength(24);
     tradeOfferPropsField.setMaxLength(96);
