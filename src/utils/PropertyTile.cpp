@@ -55,6 +55,11 @@ void PropertyTile::onLand(Player* player, Game* game) {
         const int rent = calculateRent(player, game);
         std::cout << player->getUsername() << " membayar sewa " << name
                   << " M" << rent << " kepada " << owner->getUsername() << ".\n";
+        if (festivalMultiplier > 1) {
+            std::cout << "Festival aktif: x" << festivalMultiplier
+                      << ", sisa " << festivalDuration
+                      << " giliran, sewa terbaru M" << rent << ".\n";
+        }
         game->payPlayerOrBankrupt(*player, *owner, rent, "Sewa " + name);
     }
 }

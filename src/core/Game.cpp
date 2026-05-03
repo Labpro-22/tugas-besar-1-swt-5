@@ -7,6 +7,7 @@
 #include "../../include/core/InvalidActionException.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -29,6 +30,32 @@ PropertyTile* currentBankProperty(Game& game, Player& player) {
 
     return property;
 }
+
+std::string moneyText(int amount) {
+    return "M" + std::to_string(amount);
+}
+
+std::string upperCopy(std::string value) {
+    for (char& c : value) {
+        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    }
+    return value;
+}
+
+std::string propertySummaryLine(PropertyTile* property, Game& game) {
+    if (property == nullptr) {
+        return "";
+    }
+
+    std::ostringstream oss;
+    oss << property->toString();
+    if (property->getFestivalMultiplier() > 1) {
+        oss << " | Festival aktif: x" << property->getFestivalMultiplier()
+            << ", sisa " << property->getFestivalDuration() << " giliran"
+            << ", sewa terbaru=" << moneyText(property->calculateRent(nullptr, &game));
+    }
+    return oss.str();
+}
 }
 
 Game::Game()
@@ -46,7 +73,9 @@ Game::Game()
       gameOver(false),
       lastDiceTotal(0),
       hasRolledThisTurn(false),
-      extraRollPending(false) {}
+      extraRollPending(false),
+      festivalSelectionPending(false),
+      pendingFestivalPlayerId(-1) {}
 
 // ──────────────────────────────────────────────
 // GAME LOOP
@@ -116,6 +145,57 @@ void Game::startTurn() {
         for (char& c : cmd) c = toupper(c);
 
         try {
+            if (isFestivalSelectionPendingForCurrentPlayer()) {
+                const bool isViewCommand =
+                    cmd == "CETAK_PAPAN" ||
+                    cmd == "CETAK_PROPERTI" ||
+                    cmd == "CETAK_AKTA" ||
+                    cmd == "CETAK_LOG" ||
+                    cmd == "CETAK_KARTU";
+
+                if (cmd == "FESTIVAL") {
+                    string code; ss >> code;
+                    vector<string> messages;
+                    if (code.empty()) {
+                        cout << "Masukkan kode properti.\n";
+                        continue;
+                    }
+                    applyFestivalToCurrentPlayerProperty(code, &messages);
+                    for (const string& message : messages) {
+                        cout << message << "\n";
+                    }
+                    continue;
+                }
+
+                const bool isBlockedAction =
+                    cmd == "LEMPAR_DADU" ||
+                    cmd == "GUNAKAN_KEMAMPUAN" ||
+                    cmd == "BELI" ||
+                    cmd == "LELANG" ||
+                    cmd == "TAWAR" ||
+                    cmd == "PASS" ||
+                    cmd == "BANGUN" ||
+                    cmd == "GADAI" ||
+                    cmd == "TEBUS" ||
+                    cmd == "KELUAR_PENJARA_BAYAR" ||
+                    cmd == "KELUAR_PENJARA_KARTU" ||
+                    cmd == "SIMPAN" ||
+                    cmd == "AKHIRI_GILIRAN";
+
+                if (isBlockedAction) {
+                    cout << "Selesaikan pilihan Festival terlebih dahulu. Masukkan kode properti.\n";
+                    continue;
+                }
+
+                if (!cmd.empty() && !isViewCommand) {
+                    vector<string> messages;
+                    applyFestivalToCurrentPlayerProperty(cmd, &messages);
+                    for (const string& message : messages) {
+                        cout << message << "\n";
+                    }
+                    continue;
+                }
+            }
 
             if (cmd == "CETAK_PAPAN") {
                 board.printBoard(markers, turnInfo);
@@ -133,14 +213,14 @@ void Game::startTurn() {
                     cout << target->getUsername() << " tidak memiliki properti.\n";
                 } else {
                     for (PropertyTile* pt : target->getOwnedProperties())
-                        cout << pt->toString() << "\n";
+                        cout << propertySummaryLine(pt, *this) << "\n";
                 }
 
             } else if (cmd == "CETAK_AKTA") {
                 string code; ss >> code;
                 PropertyTile* pt = dynamic_cast<PropertyTile*>(board.getTileByCode(code));
                 if (!pt) cout << "Bukan petak properti.\n";
-                else cout << pt->toString() << "\n";
+                else cout << propertySummaryLine(pt, *this) << "\n";
 
             } else if (cmd == "CETAK_LOG") {
                 logger.printLog();
@@ -168,6 +248,10 @@ void Game::startTurn() {
                            "KARTU_KEMAMPUAN", "Kartu ke-" + to_string(idx));
 
             } else if (cmd == "LEMPAR_DADU") {
+                if (isFestivalSelectionPendingForCurrentPlayer()) {
+                    cout << "Selesaikan pilihan Festival terlebih dahulu. Masukkan kode properti.\n";
+                    continue;
+                }
                 if (hasRolled && !extraRollPending) { cout << "Dadu sudah dilempar.\n"; continue; }
                 if (extraRollPending) {
                     PropertyTile* blockingProperty = currentBankProperty(*this, current);
@@ -257,6 +341,10 @@ void Game::startTurn() {
                 hasRolled = true;
 
             } else if (cmd == "BELI") {
+                if (isFestivalSelectionPendingForCurrentPlayer()) {
+                    cout << "Selesaikan pilihan Festival terlebih dahulu. Masukkan kode properti.\n";
+                    continue;
+                }
                 if (!hasRolled) { cout << "Lempar dadu dulu.\n"; continue; }
                 PropertyTile* pt = dynamic_cast<PropertyTile*>(board.getTileByIndex(current.getPosition()));
                 if (!pt || pt->getStatus() != BANK) { cout << "Tidak ada properti BANK di sini.\n"; continue; }
@@ -270,6 +358,10 @@ void Game::startTurn() {
                 logger.log(turnManager.getCurrentTurn(), current.getUsername(), "BELI", pt->getName() + " M" + to_string(price));
 
             } else if (cmd == "LELANG") {
+                if (isFestivalSelectionPendingForCurrentPlayer()) {
+                    cout << "Selesaikan pilihan Festival terlebih dahulu. Masukkan kode properti.\n";
+                    continue;
+                }
                 if (!hasRolled) { cout << "Lempar dadu dulu.\n"; continue; }
                 PropertyTile* pt = dynamic_cast<PropertyTile*>(board.getTileByIndex(current.getPosition()));
                 if (!pt || pt->getStatus() != BANK) { cout << "Tidak ada properti untuk dilelang.\n"; continue; }
@@ -351,6 +443,10 @@ void Game::startTurn() {
                 cout << "(Simpan ditangani GameManager)\n";
 
             } else if (cmd == "AKHIRI_GILIRAN") {
+                if (isFestivalSelectionPendingForCurrentPlayer()) {
+                    cout << "Selesaikan pilihan Festival terlebih dahulu. Masukkan kode properti.\n";
+                    continue;
+                }
                 if (!hasRolled) { cout << "Lempar dadu dulu.\n"; continue; }
                 if (auctionManager.isAuctionActive()) { cout << "Selesaikan lelang aktif dulu.\n"; continue; }
                 PropertyTile* blockingProperty = currentBankProperty(*this, current);
@@ -364,6 +460,25 @@ void Game::startTurn() {
                     continue;
                 }
                 turnEnded = true;
+
+            } else if (cmd == "FESTIVAL") {
+                string code; ss >> code;
+                vector<string> messages;
+                if (code.empty()) {
+                    cout << "Masukkan kode properti.\n";
+                    continue;
+                }
+                applyFestivalToCurrentPlayerProperty(code, &messages);
+                for (const string& message : messages) {
+                    cout << message << "\n";
+                }
+
+            } else if (!cmd.empty() && isFestivalSelectionPendingForCurrentPlayer()) {
+                vector<string> messages;
+                applyFestivalToCurrentPlayerProperty(cmd, &messages);
+                for (const string& message : messages) {
+                    cout << message << "\n";
+                }
 
             } else if (!cmd.empty()) {
                 cout << "Perintah tidak dikenal: " << cmd << "\n";
@@ -399,6 +514,11 @@ void Game::endTurn() {
     }
 
     Player& current = players[static_cast<size_t>(playerIdx)];
+
+    if (festivalSelectionPending && pendingFestivalPlayerId == current.getId()) {
+        cout << "Selesaikan pilihan Festival terlebih dahulu.\n";
+        return;
+    }
 
     // Decrement festival semua properti milik pemain aktif
     for (PropertyTile* pt : current.getOwnedProperties()) {
@@ -477,6 +597,11 @@ std::pair<int, int> Game::rollDiceForCurrentPlayer() {
     }
 
     Player& current = players[static_cast<size_t>(playerIdx)];
+
+    if (festivalSelectionPending && pendingFestivalPlayerId == current.getId()) {
+        cout << "Selesaikan pilihan Festival terlebih dahulu.\n";
+        return {0, 0};
+    }
 
     if (current.getStatus() == PlayerStatus::JAILED && current.getJailTurnsAttempted() >= 3) {
         logger.log(turnManager.getCurrentTurn(), current.getUsername(), "PENJARA",
@@ -857,6 +982,130 @@ bool Game::useJailFreeCardForCurrentPlayer() {
     return false;
 }
 
+void Game::requestFestivalSelection(Player& player) {
+    std::vector<PropertyTile*>& properties = player.getOwnedProperties();
+
+    cout << "Kamu mendarat di petak Festival!\n";
+    if (properties.empty()) {
+        cout << "Festival tidak aktif karena " << player.getUsername()
+             << " belum memiliki properti.\n";
+        logger.log(turnManager.getCurrentTurn(), player.getUsername(), "FESTIVAL", "Tidak ada properti");
+        festivalSelectionPending = false;
+        pendingFestivalPlayerId = -1;
+        return;
+    }
+
+    festivalSelectionPending = true;
+    pendingFestivalPlayerId = player.getId();
+
+    for (const string& line : buildFestivalSelectionLines(player)) {
+        cout << line << "\n";
+    }
+    cout << "Masukkan kode properti: ";
+}
+
+bool Game::hasPendingFestivalSelection() const {
+    return festivalSelectionPending;
+}
+
+bool Game::isFestivalSelectionPendingForCurrentPlayer() const {
+    if (!festivalSelectionPending || pendingFestivalPlayerId < 0 || players.empty()) {
+        return false;
+    }
+
+    int playerIdx = turnManager.getCurrentPlayerIndex();
+    if (playerIdx < 0 || playerIdx >= static_cast<int>(players.size())) {
+        return false;
+    }
+
+    return players[static_cast<size_t>(playerIdx)].getId() == pendingFestivalPlayerId;
+}
+
+std::vector<std::string> Game::buildFestivalSelectionLines(Player& player) const {
+    std::vector<std::string> lines;
+    lines.push_back("Daftar properti milikmu:");
+
+    for (PropertyTile* property : player.getOwnedProperties()) {
+        if (property == nullptr) {
+            continue;
+        }
+        lines.push_back("- " + property->getCode() + " (" + property->getName() + ")");
+    }
+
+    if (lines.size() == 1) {
+        lines.push_back("(tidak ada properti)");
+    }
+
+    return lines;
+}
+
+bool Game::applyFestivalToCurrentPlayerProperty(const std::string& code, std::vector<std::string>* messages) {
+    auto addMessage = [messages](const std::string& message) {
+        if (messages != nullptr) {
+            messages->push_back(message);
+        }
+    };
+
+    if (!isFestivalSelectionPendingForCurrentPlayer()) {
+        addMessage("Tidak ada pilihan Festival yang sedang menunggu.");
+        return false;
+    }
+
+    int playerIdx = turnManager.getCurrentPlayerIndex();
+    Player& current = players[static_cast<size_t>(playerIdx)];
+    const std::string wantedCode = upperCopy(code);
+
+    PropertyTile* selected = nullptr;
+    try {
+        Tile* tile = board.getTileByCode(wantedCode);
+        selected = dynamic_cast<PropertyTile*>(tile);
+    } catch (...) {
+        selected = nullptr;
+    }
+
+    if (selected == nullptr) {
+        addMessage("-> Kode properti tidak valid!");
+        return false;
+    }
+
+    if (selected->getOwner() != &current) {
+        addMessage("-> Properti bukan milikmu!");
+        return false;
+    }
+
+    const int previousRent = selected->calculateRent(nullptr, this);
+    const int previousMultiplier = selected->getFestivalMultiplier();
+
+    selected->applyFestival();
+
+    const int currentRent = selected->calculateRent(nullptr, this);
+    const int currentMultiplier = selected->getFestivalMultiplier();
+
+    if (previousMultiplier <= 1) {
+        addMessage("Efek festival aktif!");
+        addMessage("Sewa awal: " + moneyText(previousRent));
+        addMessage("Sewa sekarang: " + moneyText(currentRent));
+        addMessage("Durasi: " + std::to_string(selected->getFestivalDuration()) + " giliran");
+    } else if (previousMultiplier < 8) {
+        addMessage("Efek diperkuat!");
+        addMessage("Sewa sebelumnya: " + moneyText(previousRent));
+        addMessage("Sewa sekarang: " + moneyText(currentRent));
+        addMessage("Durasi di-reset menjadi: " + std::to_string(selected->getFestivalDuration()) + " giliran");
+    } else {
+        addMessage("Efek sudah maksimum (harga sewa sudah digandakan tiga kali)");
+        addMessage("Sewa sekarang: " + moneyText(currentRent));
+        addMessage("Durasi di-reset menjadi: " + std::to_string(selected->getFestivalDuration()) + " giliran");
+    }
+
+    logger.log(turnManager.getCurrentTurn(), current.getUsername(), "FESTIVAL",
+               selected->getName() + " x" + std::to_string(currentMultiplier) +
+               " durasi " + std::to_string(selected->getFestivalDuration()));
+
+    festivalSelectionPending = false;
+    pendingFestivalPlayerId = -1;
+    return true;
+}
+
 void Game::checkWinCondition() {
     int active = 0;
     for (const Player& p : players) {
@@ -893,7 +1142,7 @@ void Game::executeCommand(const std::string& command) {
     if (command == "LEMPAR_DADU") {
         rollDiceForCurrentPlayer();
     } else if (command == "AKHIRI_GILIRAN") {
-        if (!prepareExtraRollForCurrentPlayer()) {
+        if (!isFestivalSelectionPendingForCurrentPlayer() && !prepareExtraRollForCurrentPlayer()) {
             endCurrentTurn();
         }
     } else if (command == "BELI") {

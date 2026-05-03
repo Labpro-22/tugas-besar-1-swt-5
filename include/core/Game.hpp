@@ -35,6 +35,8 @@ private:
     int lastDiceTotal;
     bool hasRolledThisTurn;
     bool extraRollPending;
+    bool festivalSelectionPending;
+    int pendingFestivalPlayerId;
     
 public:
     // Constructor
@@ -68,6 +70,11 @@ public:
     bool prepareExtraRollForCurrentPlayer();
     bool payJailFineForCurrentPlayer();
     bool useJailFreeCardForCurrentPlayer();
+    void requestFestivalSelection(Player& player);
+    bool hasPendingFestivalSelection() const;
+    bool isFestivalSelectionPendingForCurrentPlayer() const;
+    std::vector<std::string> buildFestivalSelectionLines(Player& player) const;
+    bool applyFestivalToCurrentPlayerProperty(const std::string& code, std::vector<std::string>* messages = nullptr);
 
     // Getters / Setters    
     Board& getBoard();

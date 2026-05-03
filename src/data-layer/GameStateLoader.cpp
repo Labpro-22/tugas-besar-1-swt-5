@@ -765,6 +765,17 @@ void GameStateLoader::applyFestivalState(PropertyTile* property, int multiplier,
         return;
     }
 
+    if (duration <= 0 || multiplier <= 1)
+    {
+        property->resetFestivalIfExpired();
+        return;
+    }
+
+    if (multiplier > 8)
+    {
+        multiplier = 8;
+    }
+
     while (property->getFestivalMultiplier() < multiplier)
     {
         property->applyFestival();
