@@ -345,7 +345,7 @@ namespace {
         return "Status : " + status;
     }
 
-    std::vector<std::string> buildPropertyInfoLines(PropertyTile* property) {
+    std::vector<std::string> buildPropertyInfoLines(Game* game, PropertyTile* property) {
         if (property == nullptr) {
             return {};
         }
@@ -424,6 +424,7 @@ namespace {
                 "Festival : x" + std::to_string(property->getFestivalMultiplier()) +
                 " (" + std::to_string(property->getFestivalDuration()) + " giliran)"
             );
+            lines.push_back("Sewa terbaru : " + formatMoney(property->calculateRent(nullptr, game)));
         }
 
         return lines;
@@ -870,7 +871,7 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
 
             PropertyTile* pt = dynamic_cast<PropertyTile*>(t);
             if (pt != nullptr) {
-                showOverlay("AKTA KEPEMILIKAN", buildPropertyInfoLines(pt), "Klik X untuk menutup.");
+                showOverlay("AKTA KEPEMILIKAN", buildPropertyInfoLines(g, pt), "Klik X untuk menutup.");
                 return;
             }
 
@@ -899,6 +900,11 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             for (PropertyTile* pt : p.getOwnedProperties()) {
                 std::string row = pt->getCode() + " - " + pt->getName();
                 if (pt->isMortgaged()) row += " [GADAI]";
+                if (pt->getFestivalMultiplier() > 1) {
+                    row += " [Festival x" + std::to_string(pt->getFestivalMultiplier()) +
+                           ", " + std::to_string(pt->getFestivalDuration()) +
+                           " giliran, sewa " + formatMoney(pt->calculateRent(nullptr, g)) + "]";
+                }
                 lines.push_back(row);
             }
 
@@ -935,6 +941,38 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
         }},
 
         {"Festival", [this]() {
+            Game* g = gameManager->getCurrentGame();
+            if (g == nullptr) return;
+
+            if (g->isFestivalSelectionPendingForCurrentPlayer()) {
+                int idx = g->getTurnManager().getCurrentPlayerIndex();
+                if (idx < 0 || idx >= static_cast<int>(g->getPlayers().size())) return;
+
+                Tile* selected = nullptr;
+                if (g->getBoard().size() > 0 && selectedTile >= 0 && selectedTile < g->getBoard().size()) {
+                    selected = g->getBoard().getTileByIndex(selectedTile);
+                }
+
+                PropertyTile* property = dynamic_cast<PropertyTile*>(selected);
+                if (property == nullptr) {
+                    std::vector<std::string> lines = g->buildFestivalSelectionLines(g->getPlayer(idx));
+                    lines.push_back("Pilih petak properti milikmu, lalu klik Festival lagi.");
+                    showOverlay("Festival", lines);
+                    return;
+                }
+
+                std::vector<std::string> lines;
+                bool ok = g->applyFestivalToCurrentPlayerProperty(property->getCode(), &lines);
+                if (!ok) {
+                    const std::vector<std::string> options = g->buildFestivalSelectionLines(g->getPlayer(idx));
+                    lines.insert(lines.end(), options.begin(), options.end());
+                    lines.push_back("Pilih petak properti milikmu, lalu klik Festival lagi.");
+                }
+
+                showOverlay(ok ? "Festival Aktif" : "Festival", lines);
+                return;
+            }
+
             showOverlay(
                 "Festival",
                 {
@@ -1012,6 +1050,18 @@ InGameScene::InGameScene(SceneManager* sm, GameManager* gm, AccountManager* am)
             if (g->getAuctionManager().isAuctionActive() || showAuctionModal) {
                 showAuctionModal = true;
                 overlayOpen = false;
+                return;
+            }
+
+            if (g->isFestivalSelectionPendingForCurrentPlayer()) {
+                int idx = g->getTurnManager().getCurrentPlayerIndex();
+                std::vector<std::string> lines = {"Selesaikan pilihan Festival terlebih dahulu."};
+                if (idx >= 0 && idx < static_cast<int>(g->getPlayers().size())) {
+                    const std::vector<std::string> options = g->buildFestivalSelectionLines(g->getPlayer(idx));
+                    lines.insert(lines.end(), options.begin(), options.end());
+                }
+                lines.push_back("Pilih petak properti milikmu, lalu klik tombol Festival.");
+                showOverlay("Festival", lines);
                 return;
             }
 
@@ -1284,6 +1334,21 @@ void InGameScene::rollDiceAndShowResult() {
 
     propertyDecisionResolved = false;
     refreshPropertyDecisionState();
+
+    if (g->isFestivalSelectionPendingForCurrentPlayer()) {
+        int idx = g->getTurnManager().getCurrentPlayerIndex();
+        if (idx >= 0 && idx < static_cast<int>(g->getPlayers().size())) {
+            std::vector<std::string> lines = {
+                "Hasil dadu: " + std::to_string(result.first) + " + " + std::to_string(result.second),
+                "Kamu mendarat di petak Festival!"
+            };
+            const std::vector<std::string> options = g->buildFestivalSelectionLines(g->getPlayer(idx));
+            lines.insert(lines.end(), options.begin(), options.end());
+            lines.push_back("Pilih petak properti milikmu, lalu klik tombol Festival.");
+            showOverlay("Festival", lines);
+        }
+        return;
+    }
 
     if (propertyDecisionPending && pendingProperty != nullptr) {
         int idx = g->getTurnManager().getCurrentPlayerIndex();
