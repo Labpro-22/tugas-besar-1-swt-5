@@ -22,8 +22,9 @@ public:
     void grantExtraTurn();
     void removePlayer(int playerId);
     bool isMaxTurnReached() const;
+    bool isLastPlayerInCurrentTurn() const;
 
-    // Getters    
+    // Getters
     int getCurrentPlayerIndex() const;
     int getCurrentTurn() const;
     int getMaxTurn() const;

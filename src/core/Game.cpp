@@ -324,19 +324,71 @@ void Game::startTurn() {
 }
 
 void Game::endTurn() {
-    if (players.empty()) return;
+    if (players.empty() || gameOver) {
+        return;
+    }
+
     int playerIdx = turnManager.getCurrentPlayerIndex();
+
+    if (playerIdx < 0 || playerIdx >= static_cast<int>(players.size())) {
+        return;
+    }
+
     Player& current = players[static_cast<size_t>(playerIdx)];
 
     // Decrement festival semua properti milik pemain aktif
     for (PropertyTile* pt : current.getOwnedProperties()) {
-        pt->decrementFestivalDuration();
-        pt->resetFestivalIfExpired();
+        if (pt != nullptr) {
+            pt->decrementFestivalDuration();
+            pt->resetFestivalIfExpired();
+        }
     }
 
     current.consecutiveDoubleCount = 0;
-    turnManager.nextPlayer();
     hasRolledThisTurn = false;
+
+    const bool finalTurnFinished =
+        turnManager.getMaxTurn() > 0 &&
+        turnManager.getCurrentTurn() >= turnManager.getMaxTurn() &&
+        turnManager.isLastPlayerInCurrentTurn();
+
+    if (finalTurnFinished) {
+        gameOver = true;
+
+        Player* winner = nullptr;
+
+        for (Player& p : players) {
+            if (!p.isBankrupt() &&
+                (winner == nullptr || p.getTotalWealth() > winner->getTotalWealth())) {
+                winner = &p;
+            }
+        }
+
+        std::string detail = "Batas maksimum turn tercapai.";
+
+        if (winner != nullptr) {
+            detail += " Pemenang: " + winner->getUsername() +
+                      " dengan total kekayaan M" + std::to_string(winner->getTotalWealth());
+        }
+
+        logger.log(
+            turnManager.getCurrentTurn(),
+            "System",
+            "GAME_OVER",
+            detail
+        );
+
+        cout << "\n=== BATAS TURN TERCAPAI ===\n";
+
+        if (winner != nullptr) {
+            cout << "Pemenang: " << winner->getUsername()
+                 << " (M" << winner->getTotalWealth() << ")\n";
+        }
+
+        return;
+    }
+
+    turnManager.nextPlayer();
     checkWinCondition();
 }
 
